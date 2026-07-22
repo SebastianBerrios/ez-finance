@@ -154,12 +154,7 @@ const config = [
           default: "allow",
           rules: [
             {
-              from: [
-                "domain",
-                "shared-domain",
-                "application",
-                "shared-app",
-              ],
+              from: ["domain", "shared-domain", "application", "shared-app"],
               disallow: ["react", "react-dom", "next", "next/*", "@supabase/*"],
               message:
                 "Pure layers (domain/application) must not import React/Next/Supabase.",

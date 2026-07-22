@@ -44,7 +44,7 @@ describe("Result helpers", () => {
     it("throws an error when called with an unexpected value", () => {
       // TypeScript would prevent this at compile time, but we test runtime behavior
       expect(() => assertNever("unexpected" as never)).toThrow(
-        "Unexpected value"
+        "Unexpected value",
       );
     });
   });

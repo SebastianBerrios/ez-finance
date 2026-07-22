@@ -1,10 +1,6 @@
 import { cn } from "./utils";
 
-export type MoneyDisplayVariant =
-  | "income"
-  | "expense"
-  | "transfer"
-  | "neutral";
+export type MoneyDisplayVariant = "income" | "expense" | "transfer" | "neutral";
 
 export type MoneyDisplaySize = "sm" | "md" | "lg" | "xl";
 
@@ -49,7 +45,7 @@ export function MoneyDisplay({
         "font-mono tabular-nums",
         variantClasses[variant],
         sizeClasses[size],
-        className
+        className,
       )}
     >
       {formatted}

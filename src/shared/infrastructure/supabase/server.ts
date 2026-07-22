@@ -1,7 +1,10 @@
 // server.ts — server-side Supabase client factory
 // SCAFFOLD ONLY — not invoked during Fase 0 builds
 // Uses cookies() from next/headers for request-scoped session management
-import { type CookieOptions, createServerClient as createSSRServerClient } from "@supabase/ssr";
+import {
+  type CookieOptions,
+  createServerClient as createSSRServerClient,
+} from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 import { getSupabaseEnv } from "./env";
@@ -16,7 +19,11 @@ export async function createServerClient() {
         return cookieStore.getAll();
       },
       setAll(
-        cookiesToSet: Array<{ name: string; value: string; options?: CookieOptions }>
+        cookiesToSet: Array<{
+          name: string;
+          value: string;
+          options?: CookieOptions;
+        }>,
       ) {
         try {
           cookiesToSet.forEach(({ name, value, options }) => {

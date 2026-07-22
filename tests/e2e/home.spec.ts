@@ -22,7 +22,7 @@ test.describe("Home page smoke test", () => {
     await page.goto("/");
 
     const registrations = await page.evaluate(() =>
-      navigator.serviceWorker.getRegistrations().then((regs) => regs.length)
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.length),
     );
     expect(registrations).toBe(0);
   });

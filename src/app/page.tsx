@@ -6,12 +6,10 @@ export default function Home() {
     <main className="flex min-h-screen w-full max-w-full flex-col items-center justify-center overflow-x-hidden px-4 py-16">
       <div className="flex w-full max-w-sm flex-col items-center gap-8 text-center">
         <div className="flex flex-col gap-2">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+          <h1 className="text-foreground text-4xl font-bold tracking-tight">
             ez finance
           </h1>
-          <p className="text-lg text-muted-foreground">
-            Tus finanzas, claras.
-          </p>
+          <p className="text-muted-foreground text-lg">Tus finanzas, claras.</p>
         </div>
 
         <MoneyDisplay amount={1234.56} currency="EUR" variant="income" />
