@@ -3,8 +3,6 @@
 // exactOptionalPropertyTypes + noUncheckedIndexedAccess are ON
 
 import { describe, expect, it } from "vitest";
-import { fromMinorUnits } from "@shared/domain/money";
-import { expectOk } from "@shared/domain/result";
 import type {
   BudgetConfig,
   MonthlySnapshot,
@@ -12,6 +10,8 @@ import type {
   SnapshotCategory,
   SnapshotTransaction,
 } from "@shared/domain/budget-types";
+import { fromMinorUnits } from "@shared/domain/money";
+import { expectOk } from "@shared/domain/result";
 import { computeBudget } from "./budget-engine";
 
 // ---------------------------------------------------------------------------

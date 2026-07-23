@@ -2,8 +2,8 @@
 // exactOptionalPropertyTypes + noUncheckedIndexedAccess are ON
 
 import type { Alert, BudgetConfig, BudgetResult, Bucket } from "@shared/domain/budget-types";
-import type { Classified } from "./transfer-classifier";
 import { isZero } from "@shared/domain/money";
+import type { Classified } from "./transfer-classifier";
 
 // ---------------------------------------------------------------------------
 // generateAlerts
