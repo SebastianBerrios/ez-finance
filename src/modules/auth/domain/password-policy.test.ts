@@ -18,6 +18,23 @@ describe("PasswordPolicy", () => {
       const result = passwordPolicy.validate("SuperSecure123456");
       expect(result.ok).toBe(true);
     });
+
+    it("accepts accented Unicode letters as a letter (ñ, é) plus a digit", () => {
+      // "ññññññññ1" — 9 chars, still < 10; add one more to reach 10.
+      const result = passwordPolicy.validate("ñññññññññ1");
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts a Unicode digit as satisfying the number rule", () => {
+      // Arabic-Indic digit ٥ (U+0665) is a Unicode number; letters via 'password'.
+      const result = passwordPolicy.validate("passwordé٥");
+      expect(result.ok).toBe(true);
+    });
+
+    it("accepts exactly 10 code points with a letter and a digit", () => {
+      const result = passwordPolicy.validate("abcdef1234");
+      expect(result.ok).toBe(true);
+    });
   });
 
   describe("invalid passwords", () => {
@@ -47,6 +64,18 @@ describe("PasswordPolicy", () => {
 
     it("rejects an empty string", () => {
       const result = passwordPolicy.validate("");
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("WeakPassword");
+    });
+
+    it("rejects exactly 9 chars even with letter and digit (boundary)", () => {
+      const result = passwordPolicy.validate("abcdefgh1"); // 9 code points
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.kind).toBe("WeakPassword");
+    });
+
+    it("rejects accented all-letters with no number (>=10)", () => {
+      const result = passwordPolicy.validate("ñññññññññé"); // 10 letters, no digit
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.error.kind).toBe("WeakPassword");
     });
