@@ -47,9 +47,9 @@ const config = [
       },
     },
     settings: {
-      "boundaries/include": ["src/**/*", "app/**/*"],
+      "boundaries/include": ["src/**/*"],
       "boundaries/elements": [
-        { type: "app", pattern: "app/**", mode: "full" },
+        { type: "app", pattern: "src/app/**", mode: "full" },
         { type: "shared-domain", pattern: "src/shared/domain/**" },
         { type: "shared-app", pattern: "src/shared/application/**" },
         { type: "shared-infra", pattern: "src/shared/infrastructure/**" },
@@ -131,10 +131,12 @@ const config = [
                 ["application", { module: "${from.module}" }],
               ],
             },
-            // APP (delivery layer): may compose everything
+            // APP (delivery layer): may compose everything, including
+            // sibling delivery-layer files (layouts, CSS, route groups).
             {
               from: ["app"],
               allow: [
+                "app",
                 "shared-domain",
                 "shared-app",
                 "shared-ui",
