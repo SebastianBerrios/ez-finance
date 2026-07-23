@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { ok, err } from "@/shared/domain/result";
 
 import { changeEmail } from "./change-email";
@@ -36,12 +37,19 @@ describe("changeEmail use case", () => {
     expect(auth.changeEmail).not.toHaveBeenCalled();
   });
 
-  it("non-enumeration: taken email returns ConflictOrRejected (no 'email taken' message)", async () => {
+  it("non-enumeration: taken email returns an error carrying ONLY {kind} — no 'email taken' or existence-revealing payload", async () => {
     const auth = makeFakeAuthPort({
-      changeEmail: vi.fn().mockResolvedValue(err({ kind: "ConflictOrRejected" })),
+      changeEmail: vi
+        .fn()
+        .mockResolvedValue(err({ kind: "ConflictOrRejected" } satisfies AuthError)),
     });
     const result = await changeEmail({ next: "taken@example.com" }, { auth });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe("ConflictOrRejected");
+    if (!result.ok) {
+      expect(result.error.kind).toBe("ConflictOrRejected");
+      // The propagated error must not leak the target address or any detail.
+      expect(Object.keys(result.error)).toEqual(["kind"]);
+      expect(JSON.stringify(result.error)).not.toContain("taken@example.com");
+    }
   });
 });

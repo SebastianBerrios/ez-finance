@@ -54,6 +54,25 @@ describe("register use case", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("non-enumeration: when the adapter rejects (ConflictOrRejected) the error carries ONLY {kind} — no existence-revealing payload", async () => {
+    // A real adapter collapses an already-registered email into an opaque
+    // AuthError. Assert the use case propagates NOTHING beyond the kind
+    // discriminant — no email, message, provider, or detail field that
+    // could confirm the account exists.
+    const auth = makeFakeAuthPort({
+      register: vi
+        .fn()
+        .mockResolvedValue(err({ kind: "ConflictOrRejected" } satisfies AuthError)),
+    });
+    const result = await register({ email: "existing@example.com", password: "Password1!" }, { auth });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe("ConflictOrRejected");
+      expect(Object.keys(result.error)).toEqual(["kind"]);
+      expect(JSON.stringify(result.error)).not.toContain("existing@example.com");
+    }
+  });
+
   it("validates email before password — invalid email short-circuits", async () => {
     const auth = makeFakeAuthPort();
     const result = await register({ email: "bademail", password: "weak" }, { auth });

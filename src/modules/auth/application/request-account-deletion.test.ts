@@ -43,7 +43,11 @@ describe("requestAccountDeletion use case", () => {
     expect(auth.logout).toHaveBeenCalledOnce();
   });
 
-  it("propagates deletion port error (e.g. sole-owner of shared workspace)", async () => {
+  it("propagates a generic block from the deletion port without acting further", async () => {
+    // NOTE: the sole-owner-of-shared-workspace rule is a GATED DB query living
+    // in the deletion adapter (Fase 2/3), NOT pure use-case logic. This test
+    // only covers that the use case forwards a generic ConflictOrRejected block
+    // and does NOT proceed to close sessions when the port rejects.
     const deletion = makeFakeDeletionPort({
       request: vi.fn().mockResolvedValue(err({ kind: "ConflictOrRejected" })),
     });
