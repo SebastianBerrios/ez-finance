@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { assertNever, err, ok } from "@shared/domain/result";
+import { assertNever, err, expectOk, ok } from "@shared/domain/result";
 
 describe("Result helpers", () => {
   describe("ok()", () => {
@@ -46,6 +46,18 @@ describe("Result helpers", () => {
       expect(() => assertNever("unexpected" as never)).toThrow(
         "Unexpected value",
       );
+    });
+  });
+
+  describe("expectOk()", () => {
+    it("returns the value when result is ok", () => {
+      const result = ok(42);
+      expect(expectOk(result)).toBe(42);
+    });
+
+    it("throws when result is err", () => {
+      const result = err("some error");
+      expect(() => expectOk(result)).toThrow();
     });
   });
 });
