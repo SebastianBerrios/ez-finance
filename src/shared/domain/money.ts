@@ -26,8 +26,8 @@ export function isSupportedCurrency(code: string): code is CurrencyCode {
 }
 
 export function exponentOf(currency: CurrencyCode): number {
-  // currency is guaranteed to exist in CURRENCIES (invariant: CurrencyCode only created via make/fromMinorUnits/zero which validates isSupportedCurrency)
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  // currency is guaranteed to exist in CURRENCIES (invariant: CurrencyCode only created
+  // via make/fromMinorUnits/zero which validates isSupportedCurrency first)
   return CURRENCIES[currency]!;
 }
 

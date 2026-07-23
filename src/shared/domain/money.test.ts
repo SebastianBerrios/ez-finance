@@ -1,7 +1,6 @@
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import { expectOk } from "@shared/domain/result";
 import {
   CurrencyMismatchError,
   InvalidRateError,
@@ -13,8 +12,8 @@ import {
   equals,
   exponentOf,
   fromMinorUnits,
-  isSupportedCurrency,
   isNegative,
+  isSupportedCurrency,
   isZero,
   make,
   makeRate,
@@ -24,6 +23,7 @@ import {
   toMinorUnits,
   zero,
 } from "@shared/domain/money";
+import { expectOk } from "@shared/domain/result";
 
 // ---------------------------------------------------------------------------
 // Helpers
