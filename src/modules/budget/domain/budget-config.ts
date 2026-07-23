@@ -9,7 +9,8 @@ import { Result, ok, err } from "@shared/domain/result";
  *
  * Guard order (per design §3):
  *  1. Any percentage < 0  → err('percentage-negative')
- *  2. need + want + save !== 100 → err('percentages-not-100')
+ *  2. Any percentage non-integer → err('percentage-not-integer')
+ *  3. need + want + save !== 100 → err('percentages-not-100')
  *
  * Currency-vs-snapshot mismatch lives in the orchestrator (budget-engine.ts),
  * not here, because it requires the snapshot which is not an input here.
@@ -28,7 +29,17 @@ export function validateConfig(config: BudgetConfig): Result<void, ConfigError> 
     });
   }
 
-  // Guard 2: sum must be exactly 100
+  // Guard 2: percentages must be whole numbers (design contract: integers summing to 100).
+  // Fractional values would be silently Math.round-ed downstream, distorting targets.
+  if (!Number.isInteger(need) || !Number.isInteger(want) || !Number.isInteger(save)) {
+    return err<ConfigError>({
+      kind: "ConfigError",
+      reason: "percentage-not-integer",
+      detail: `Percentages must be whole numbers; got need=${need}, want=${want}, save=${save}`,
+    });
+  }
+
+  // Guard 3: sum must be exactly 100
   const sum = need + want + save;
   if (sum !== 100) {
     return err<ConfigError>({

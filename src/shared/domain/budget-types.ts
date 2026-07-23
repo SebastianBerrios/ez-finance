@@ -128,6 +128,8 @@ export interface ConfigError {
   readonly reason:
     | "percentages-not-100"
     | "percentage-negative"
-    | "income-currency-mismatch";
+    | "percentage-not-integer"
+    | "income-currency-mismatch"
+    | "currency-mismatch";
   readonly detail?: string;
 }

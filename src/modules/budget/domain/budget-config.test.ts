@@ -160,6 +160,47 @@ describe("validateConfig", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Non-integer percentages → err('percentage-not-integer')
+  // Design contract: percentages are WHOLE NUMBERS summing to 100.
+  // -------------------------------------------------------------------------
+
+  it("returns err(percentage-not-integer) for fractional percentages that sum to 100", () => {
+    const config: BudgetConfig = {
+      incomeMode: "real",
+      expectedIncome: usd(100000n),
+      percentages: { need: 33.33, want: 33.33, save: 33.34 }, // sum = 100 but fractional
+    };
+    const result = validateConfig(config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe("ConfigError");
+      expect(result.error.reason).toBe("percentage-not-integer");
+    }
+  });
+
+  it("returns err(percentage-not-integer) when a single percentage is fractional", () => {
+    const config: BudgetConfig = {
+      incomeMode: "real",
+      expectedIncome: usd(100000n),
+      percentages: { need: 49.5, want: 30.5, save: 20 }, // sum = 100 but need/want fractional
+    };
+    const result = validateConfig(config);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.reason).toBe("percentage-not-integer");
+    }
+  });
+
+  it("accepts integer config 34/33/33 (still passes after integer guard)", () => {
+    const config: BudgetConfig = {
+      incomeMode: "real",
+      expectedIncome: usd(100000n),
+      percentages: { need: 34, want: 33, save: 33 },
+    };
+    expect(validateConfig(config).ok).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
   // nearLimitThresholdPct validation (if present, must be in range 0-100)
   // -------------------------------------------------------------------------
 
