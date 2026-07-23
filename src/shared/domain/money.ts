@@ -231,11 +231,17 @@ export function multiplyByRate(m: Money, rate: Rate): Money {
 /**
  * Distribute m.minorUnits across weights proportionally.
  * sum(result) === m.minorUnits EXACTLY (largest-remainder method).
- * Weights must be non-empty (throws otherwise — precondition).
+ * Weights must be non-empty and non-negative (throws otherwise — precondition).
+ * Negative weights are rejected: largest-remainder distribution is only
+ * well-defined when every weight shares the sign convention of the whole.
  */
 export function allocate(m: Money, weights: readonly bigint[]): Money[] {
   if (weights.length === 0) {
     throw new Error("allocate: weights must be non-empty");
+  }
+
+  if (weights.some((w) => w < 0n)) {
+    throw new Error("allocate: weights must be non-negative");
   }
 
   const total = m.minorUnits;

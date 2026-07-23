@@ -479,6 +479,12 @@ describe("allocate", () => {
     expect(() => allocate(m, [0n, 0n])).toThrow();
   });
 
+  it("throws when any weight is negative (largest-remainder is undefined for mixed signs)", () => {
+    const m = money("USD", 100n);
+    expect(() => allocate(m, [1n, -2n])).toThrow();
+    expect(() => allocate(m, [-1n])).toThrow();
+  });
+
   it("all parts share the same currency", () => {
     const m = money("EUR", 100n);
     const parts = allocate(m, [1n, 1n, 1n]);
