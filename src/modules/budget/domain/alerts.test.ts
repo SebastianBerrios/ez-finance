@@ -281,4 +281,46 @@ describe("generateAlerts — category alerts", () => {
 
     expect(catAlerts).toHaveLength(0);
   });
+
+  it("skips category limit when no expense recorded for that category (consumed === undefined)", () => {
+    // categoryLimits configured for cat-2, but no expense for cat-2 in classified
+    const config = makeConfig({
+      categoryLimits: [{ categoryId: "cat-2", limit: usd(10000n) }],
+    });
+    // classified has no entry for cat-2
+    const classified: Classified = {
+      incomeTotal: usd(100000n),
+      expenseByCategory: new Map(), // empty — no expense for cat-2
+      expenseByBucket: { need: usd(0n), want: usd(0n), save: usd(0n) },
+      transferSavingsInflow: usd(0n),
+    };
+    const result = makeResultBuckets(0, 0, 0);
+
+    const alerts = generateAlerts(result, classified, config, new Map());
+    const catAlerts = alerts.filter((a) => a.scope === "category");
+
+    // No alert because consumed is undefined for cat-2
+    expect(catAlerts).toHaveLength(0);
+  });
+
+  it("skips category limit when limit is zero (undefined behavior — guard skips it)", () => {
+    const zeroLimit = usd(0n);
+    const config = makeConfig({
+      categoryLimits: [{ categoryId: "cat-3", limit: zeroLimit }],
+    });
+    const cat3Expense = usd(5000n);
+    const classified: Classified = {
+      incomeTotal: usd(100000n),
+      expenseByCategory: new Map([["cat-3", cat3Expense]]),
+      expenseByBucket: { need: cat3Expense, want: usd(0n), save: usd(0n) },
+      transferSavingsInflow: usd(0n),
+    };
+    const result = makeResultBuckets(0, 0, 0);
+
+    const alerts = generateAlerts(result, classified, config, new Map([["cat-3", "need" as const]]));
+    const catAlerts = alerts.filter((a) => a.scope === "category");
+
+    // Zero limit is skipped (undefined behavior guard)
+    expect(catAlerts).toHaveLength(0);
+  });
 });
