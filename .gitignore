@@ -29,3 +29,6 @@ build/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# gentle-ai skill registry (machine-specific absolute paths)
+.atl/
