@@ -12,7 +12,6 @@ describe("AuthError", () => {
       "InvalidEmail",
       "WeakPassword",
       "AuthenticationFailed",
-      "EmailNotConfirmed",
       "RateLimited",
       "SessionExpired",
       "ReauthRequired",
@@ -22,6 +21,11 @@ describe("AuthError", () => {
 
     it.each(variants)("returns true for variant %s", (kind) => {
       expect(isAuthError({ kind })).toBe(true);
+    });
+
+    it("returns false for the removed EmailNotConfirmed variant", () => {
+      // EmailNotConfirmed was removed to close a login enumeration oracle.
+      expect(isAuthError({ kind: "EmailNotConfirmed" })).toBe(false);
     });
 
     it("returns false for a plain object without kind", () => {
@@ -42,7 +46,6 @@ describe("AuthError", () => {
       "InvalidEmail",
       "WeakPassword",
       "AuthenticationFailed",
-      "EmailNotConfirmed",
       "RateLimited",
       "SessionExpired",
       "ReauthRequired",
@@ -75,8 +78,8 @@ describe("AuthError", () => {
       );
     });
 
-    it("maps 'email_not_confirmed' to EmailNotConfirmed", () => {
-      expect(classify("email_not_confirmed").kind).toBe("EmailNotConfirmed");
+    it("maps 'email_not_confirmed' to AuthenticationFailed (non-enumerating — no existence oracle on login)", () => {
+      expect(classify("email_not_confirmed").kind).toBe("AuthenticationFailed");
     });
 
     it("maps 'over_email_send_rate_limit' to RateLimited", () => {
@@ -99,8 +102,8 @@ describe("AuthError", () => {
       expect(classify("reauthentication_needed").kind).toBe("ReauthRequired");
     });
 
-    it("maps 'same_password' to ReauthRequired", () => {
-      expect(classify("same_password").kind).toBe("ReauthRequired");
+    it("maps 'same_password' to ConflictOrRejected (benign rejection — NOT a re-auth loop)", () => {
+      expect(classify("same_password").kind).toBe("ConflictOrRejected");
     });
 
     it("maps 'email_exists' to ConflictOrRejected", () => {
@@ -133,6 +136,49 @@ describe("AuthError", () => {
       expect(classify("user_not_found").kind).toBe(
         classify("invalid_credentials").kind,
       );
+    });
+
+    it("non-enumeration on the login path: email_not_confirmed, user_not_found and invalid_credentials all collapse to the SAME kind", () => {
+      const notConfirmed = classify("email_not_confirmed").kind;
+      const notFound = classify("user_not_found").kind;
+      const badCreds = classify("invalid_credentials").kind;
+      expect(notConfirmed).toBe(notFound);
+      expect(notFound).toBe(badCreds);
+      expect(notConfirmed).toBe("AuthenticationFailed");
+    });
+
+    it("keeps 'reauthentication_needed' mapped to ReauthRequired", () => {
+      expect(classify("reauthentication_needed").kind).toBe("ReauthRequired");
+    });
+
+    describe("adversarial / robust matching (exact-code, not loose substrings)", () => {
+      it("a multi-token conflict code containing 'email_exists' does not misroute or leak", () => {
+        // Must classify as a benign conflict, never AuthenticationFailed/leak.
+        expect(classify("validation_failed: email_exists").kind).toBe(
+          "ConflictOrRejected",
+        );
+      });
+
+      it("an unrelated natural-language message containing 'no user' does not misroute to SessionExpired", () => {
+        // Loose substring matching would have hit "no user" → SessionExpired.
+        // Robust matching must fall through to the fail-closed default.
+        expect(classify("there is no user-facing problem here").kind).toBe(
+          "Unavailable",
+        );
+      });
+
+      it("an unknown multi-token message classifies safely as Unavailable (fail-closed)", () => {
+        expect(classify("weird arbitrary provider chatter 12345").kind).toBe(
+          "Unavailable",
+        );
+      });
+
+      it("never echoes the raw code back in the returned error object", () => {
+        const raw = "some_unknown_supabase_error_xyz";
+        const result = classify(raw);
+        expect(Object.keys(result)).toEqual(["kind"]);
+        expect(JSON.stringify(result)).not.toContain(raw);
+      });
     });
   });
 });

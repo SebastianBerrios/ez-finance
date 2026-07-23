@@ -50,12 +50,15 @@ describe("login use case", () => {
     if (!result.ok) expect(result.error.kind).toBe("AuthenticationFailed");
   });
 
-  it("returns err(EmailNotConfirmed) when adapter signals unconfirmed email", async () => {
+  it("returns the GENERIC AuthenticationFailed for an unconfirmed email — identical to not-found/wrong-password (no enumeration oracle)", async () => {
+    // The adapter collapses email_not_confirmed to AuthenticationFailed via
+    // classify(); login must NOT surface a distinct EmailNotConfirmed variant,
+    // otherwise an attacker could distinguish existing-unconfirmed from not-found.
     const auth = makeFakeAuthPort({
-      login: vi.fn().mockResolvedValue(err({ kind: "EmailNotConfirmed" })),
+      login: vi.fn().mockResolvedValue(err({ kind: "AuthenticationFailed" })),
     });
     const result = await login({ email: "user@example.com", password: "Password1!" }, { auth });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe("EmailNotConfirmed");
+    if (!result.ok) expect(result.error.kind).toBe("AuthenticationFailed");
   });
 });
