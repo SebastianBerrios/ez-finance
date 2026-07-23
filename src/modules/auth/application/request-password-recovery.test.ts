@@ -50,4 +50,14 @@ describe("requestPasswordRecovery use case", () => {
     const result = await requestPasswordRecovery({ email: "google@example.com" }, { auth });
     expect(result.ok).toBe(true);
   });
+
+  it("returns generic ok even when the port THROWS (rejects) — exception safety", async () => {
+    const auth = makeFakeAuthPort({
+      requestPasswordRecovery: vi
+        .fn()
+        .mockRejectedValue(new Error("network exploded")),
+    });
+    const result = await requestPasswordRecovery({ email: "boom@example.com" }, { auth });
+    expect(result.ok).toBe(true);
+  });
 });
