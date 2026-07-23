@@ -47,6 +47,32 @@ export function computeBudget(
     });
   }
 
+  // Step 2b: defensively validate that EVERY monetary input shares baseCurrency.
+  // The internal Money.add/subtract folds (income-resolver, transfer-classifier)
+  // use expectOk() and would THROW on a cross-currency amount — violating the
+  // Result contract. Catch any shape mismatch here and return a typed err instead.
+  const base = snapshot.baseCurrency;
+  for (const tx of snapshot.transactions) {
+    if (tx.amount.currency !== base) {
+      return err<ConfigError>({
+        kind: "ConfigError",
+        reason: "currency-mismatch",
+        detail: `transaction '${tx.id}' amount currency '${tx.amount.currency}' does not match snapshot baseCurrency '${base}'`,
+      });
+    }
+  }
+  if (config.categoryLimits !== undefined) {
+    for (const { categoryId, limit } of config.categoryLimits) {
+      if (limit.currency !== base) {
+        return err<ConfigError>({
+          kind: "ConfigError",
+          reason: "currency-mismatch",
+          detail: `categoryLimit for '${categoryId}' currency '${limit.currency}' does not match snapshot baseCurrency '${base}'`,
+        });
+      }
+    }
+  }
+
   // Step 3: classify transactions
   const classified = classify(snapshot);
 
@@ -72,14 +98,8 @@ export function computeBudget(
   );
   const globalAvailable = expectOk(subtract(income, totalConsumed));
 
-  // Build categoryBucket map for alert generation
-  const categoryBucket = new Map<string, import("@shared/domain/budget-types").Bucket | null>();
-  for (const cat of snapshot.categories) {
-    categoryBucket.set(cat.id, cat.bucket);
-  }
-
   // Step 8: generate alerts
-  const alerts = generateAlerts({ buckets }, classified, config, categoryBucket);
+  const alerts = generateAlerts({ buckets }, classified, config);
 
   // Step 9: assemble and return
   return ok({

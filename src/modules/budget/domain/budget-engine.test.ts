@@ -511,31 +511,78 @@ describe("income currency mismatch", () => {
 });
 
 // ---------------------------------------------------------------------------
-// COVERAGE TASK: CurrencyMismatch err-branches inside add/subtract
-// These branches are unreachable via the public API (orchestrator currency guard
-// ensures same-currency throughout), so we use computeBudget itself with a
-// deliberately mismatched-currency snapshot to verify the guard fires before
-// the unreachable branch would be reached.
-// The internal branches in savings.ts/transfer-classifier.ts use expectOk()
-// which throws on the err branch — the orchestrator currency guard prevents
-// them from being reached at all. Coverage for those expectOk wrappers is
-// provided by the currency-mismatch test above (guard catches it first).
+// Monetary-input currency mismatch guard (defensive, before any computation)
+// A transaction amount or category-limit in a currency other than
+// snapshot.baseCurrency must produce Result.err — NEVER throw.
 // ---------------------------------------------------------------------------
 
-describe("coverage: internal add/subtract via expectOk wrappers", () => {
-  it("orchestrator currency guard fires before any internal add/subtract mismatch branch", () => {
-    // This test documents that the orchestrator guard (income-currency-mismatch)
-    // is the first line of defense. Internal add/subtract mismatch branches
-    // inside the pipeline are unreachable when baseCurrency is consistent —
-    // which is always the case when the guard passes.
-    const eurIncome = expectOk(fromMinorUnits("EUR", 100000n));
-    const snapshot = makeSnapshot([]);
-    const config = makeConfig({ expectedIncome: eurIncome });
+describe("monetary-input currency mismatch", () => {
+  it("returns Result.err(ConfigError, currency-mismatch) — does NOT throw — when an income transaction amount currency differs from baseCurrency", () => {
+    // baseCurrency = USD, but one income tx is in EUR.
+    // Before the guard, resolveIncome/classify would throw via expectOk(add(...)).
+    const eurIncome: SnapshotTransaction = {
+      id: "income-eur",
+      kind: "income",
+      amount: expectOk(fromMinorUnits("EUR", 100000n)),
+      date: "2024-01-15",
+      accountId: "bank-1",
+    };
+    const snapshot = makeSnapshot([eurIncome]); // baseCurrency USD
+    const config = makeConfig({ incomeMode: "real" });
 
-    // Must return err, not throw
     const result = computeBudget(snapshot, config);
+
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.reason).toBe("income-currency-mismatch");
+    expect(result.error.kind).toBe("ConfigError");
+    expect(result.error.reason).toBe("currency-mismatch");
+  });
+
+  it("returns Result.err(ConfigError, currency-mismatch) when an expense transaction amount currency differs from baseCurrency", () => {
+    const eurExpense: SnapshotTransaction = {
+      id: "exp-eur",
+      kind: "expense",
+      amount: expectOk(fromMinorUnits("EUR", 5000n)),
+      date: "2024-01-15",
+      accountId: "bank-1",
+      categoryId: "cat-need",
+    };
+    const snapshot = makeSnapshot([eurExpense]); // baseCurrency USD
+    const config = makeConfig({ incomeMode: "real" });
+
+    const result = computeBudget(snapshot, config);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.reason).toBe("currency-mismatch");
+  });
+
+  it("returns Result.err(ConfigError, currency-mismatch) when a categoryLimit currency differs from baseCurrency", () => {
+    const eurLimit = expectOk(fromMinorUnits("EUR", 10000n));
+    const snapshot = makeSnapshot([]); // baseCurrency USD
+    const config = makeConfig({
+      incomeMode: "real",
+      categoryLimits: [{ categoryId: "cat-need", limit: eurLimit }],
+    });
+
+    const result = computeBudget(snapshot, config);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.reason).toBe("currency-mismatch");
+  });
+
+  it("still returns ok when every monetary input matches baseCurrency (guard does not false-positive)", () => {
+    const snapshot = makeSnapshot([
+      incomeTransaction(100000n),
+      expenseTransaction("need-exp", 40000n, "cat-need"),
+    ]);
+    const config = makeConfig({
+      incomeMode: "real",
+      categoryLimits: [{ categoryId: "cat-need", limit: usd(50000n) }],
+    });
+
+    const result = computeBudget(snapshot, config);
+    expect(result.ok).toBe(true);
   });
 });
