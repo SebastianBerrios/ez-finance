@@ -26,7 +26,6 @@ export function generateAlerts(
   result: Pick<BudgetResult, "buckets">,
   classified: Classified,
   config: BudgetConfig,
-  categoryBucket: ReadonlyMap<string, Bucket | null>,
 ): Alert[] {
   const threshold = config.nearLimitThresholdPct ?? 80;
   const alerts: Alert[] = [];

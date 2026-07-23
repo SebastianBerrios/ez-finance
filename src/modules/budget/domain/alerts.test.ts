@@ -69,7 +69,7 @@ describe("generateAlerts — bucket alerts", () => {
 
   it("emits no alerts when all buckets are below threshold (< 80%)", () => {
     const result = makeResultBuckets(70, 60, 50);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
     expect(alerts).toHaveLength(0);
   });
 
@@ -79,14 +79,14 @@ describe("generateAlerts — bucket alerts", () => {
 
   it("emits near-limit alert when consumedPct equals threshold (exactly 80%)", () => {
     const result = makeResultBuckets(80, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ scope: "bucket", level: "near", bucket: "need", consumedPct: 80 });
   });
 
   it("emits near-limit alert when consumedPct is above threshold but below 100 (85%)", () => {
     const result = makeResultBuckets(85, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ scope: "bucket", level: "near", bucket: "need", consumedPct: 85 });
   });
@@ -94,7 +94,7 @@ describe("generateAlerts — bucket alerts", () => {
   it("emits near-limit alert at exactly 100% (not over — LOCKED EDGE CASE)", () => {
     // LOCKED: at exactly 100%, emits ONLY near-limit (not over-limit)
     const result = makeResultBuckets(100, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     const overAlerts = alerts.filter((a) => a.level === "over");
     const nearAlerts = alerts.filter((a) => a.level === "near");
@@ -111,7 +111,7 @@ describe("generateAlerts — bucket alerts", () => {
   it("emits over-limit alert when consumedPct > 100 (LOCKED EDGE CASE: only over, not both)", () => {
     // LOCKED: at > 100%, emits ONLY over-limit (not near+over)
     const result = makeResultBuckets(110, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     const overAlerts = alerts.filter((a) => a.level === "over");
     const nearAlerts = alerts.filter((a) => a.level === "near" && a.bucket === "need");
@@ -123,7 +123,7 @@ describe("generateAlerts — bucket alerts", () => {
 
   it("emits over-limit alert for 101%", () => {
     const result = makeResultBuckets(101, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     expect(alerts.some((a) => a.level === "over" && a.bucket === "need")).toBe(true);
     expect(alerts.some((a) => a.level === "near" && a.bucket === "need")).toBe(false);
@@ -135,7 +135,7 @@ describe("generateAlerts — bucket alerts", () => {
 
   it("emits alerts for all buckets independently", () => {
     const result = makeResultBuckets(85, 105, 50);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     const needAlert = alerts.find((a) => a.bucket === "need");
     const wantAlert = alerts.find((a) => a.bucket === "want");
@@ -154,7 +154,7 @@ describe("generateAlerts — bucket alerts", () => {
     const config = makeConfig({ nearLimitThresholdPct: 90 });
     const result = makeResultBuckets(85, 0, 0); // 85% — below custom threshold
 
-    const alerts = generateAlerts(result, makeClassified(), config, new Map());
+    const alerts = generateAlerts(result, makeClassified(), config);
     expect(alerts).toHaveLength(0); // no alert at 85% with threshold=90
   });
 
@@ -162,7 +162,7 @@ describe("generateAlerts — bucket alerts", () => {
     const config = makeConfig({ nearLimitThresholdPct: 90 });
     const result = makeResultBuckets(90, 0, 0);
 
-    const alerts = generateAlerts(result, makeClassified(), config, new Map());
+    const alerts = generateAlerts(result, makeClassified(), config);
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ level: "near", bucket: "need" });
   });
@@ -179,7 +179,7 @@ describe("generateAlerts — bucket alerts", () => {
       // nearLimitThresholdPct intentionally omitted
     };
     const result = makeResultBuckets(80, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), config, new Map());
+    const alerts = generateAlerts(result, makeClassified(), config);
 
     expect(alerts).toHaveLength(1);
     expect(alerts[0]).toMatchObject({ level: "near" });
@@ -191,7 +191,7 @@ describe("generateAlerts — bucket alerts", () => {
 
   it("returns plain Alert objects with expected fields", () => {
     const result = makeResultBuckets(95, 0, 0);
-    const alerts = generateAlerts(result, makeClassified(), makeConfig(), new Map());
+    const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     expect(alerts).toHaveLength(1);
     const alert = alerts[0]!;
@@ -220,10 +220,9 @@ describe("generateAlerts — category alerts", () => {
       expenseByBucket: { need: cat1Expense, want: usd(0n), save: usd(0n) },
       transferSavingsInflow: usd(0n),
     };
-    const categoryBucket = new Map([["cat-1", "need" as const]]);
     const result = makeResultBuckets(50, 0, 0); // below bucket threshold
 
-    const alerts = generateAlerts(result, classified, config, categoryBucket);
+    const alerts = generateAlerts(result, classified, config);
     const catAlert = alerts.find((a) => a.scope === "category" && a.categoryId === "cat-1");
 
     expect(catAlert).toBeDefined();
@@ -242,10 +241,9 @@ describe("generateAlerts — category alerts", () => {
       expenseByBucket: { need: cat1Expense, want: usd(0n), save: usd(0n) },
       transferSavingsInflow: usd(0n),
     };
-    const categoryBucket = new Map([["cat-1", "need" as const]]);
     const result = makeResultBuckets(0, 0, 0);
 
-    const alerts = generateAlerts(result, classified, config, categoryBucket);
+    const alerts = generateAlerts(result, classified, config);
     const catAlert = alerts.find((a) => a.scope === "category" && a.categoryId === "cat-1");
 
     expect(catAlert).toBeDefined();
@@ -266,7 +264,7 @@ describe("generateAlerts — category alerts", () => {
     };
     const result = makeResultBuckets(0, 0, 0);
 
-    const alerts = generateAlerts(result, classified, config, new Map([["cat-1", "need" as const]]));
+    const alerts = generateAlerts(result, classified, config);
     const catAlerts = alerts.filter((a) => a.scope === "category");
 
     expect(catAlerts).toHaveLength(0);
@@ -276,7 +274,7 @@ describe("generateAlerts — category alerts", () => {
     const config = makeConfig(); // no categoryLimits
     const result = makeResultBuckets(0, 0, 0);
 
-    const alerts = generateAlerts(result, makeClassified(), config, new Map());
+    const alerts = generateAlerts(result, makeClassified(), config);
     const catAlerts = alerts.filter((a) => a.scope === "category");
 
     expect(catAlerts).toHaveLength(0);
@@ -296,7 +294,7 @@ describe("generateAlerts — category alerts", () => {
     };
     const result = makeResultBuckets(0, 0, 0);
 
-    const alerts = generateAlerts(result, classified, config, new Map());
+    const alerts = generateAlerts(result, classified, config);
     const catAlerts = alerts.filter((a) => a.scope === "category");
 
     // No alert because consumed is undefined for cat-2
@@ -317,7 +315,7 @@ describe("generateAlerts — category alerts", () => {
     };
     const result = makeResultBuckets(0, 0, 0);
 
-    const alerts = generateAlerts(result, classified, config, new Map([["cat-3", "need" as const]]));
+    const alerts = generateAlerts(result, classified, config);
     const catAlerts = alerts.filter((a) => a.scope === "category");
 
     // Zero limit is skipped (undefined behavior guard)
