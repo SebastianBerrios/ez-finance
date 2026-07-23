@@ -7,7 +7,7 @@ import { type DeletionPort } from "./ports/deletion-port";
 
 function makeFakeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPort {
   return {
-    getState: vi.fn().mockResolvedValue(ok("pending")),
+    getState: vi.fn().mockResolvedValue(ok("GRACE_PERIOD")),
     request: vi.fn().mockResolvedValue(ok(undefined)),
     cancel: vi.fn().mockResolvedValue(ok(undefined)),
     ...overrides,

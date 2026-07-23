@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cancelDeletion,
   executeDeletion,
+  reactivateDeletion,
   requestDeletion,
   type DeletionState,
 } from "./deletion-state";
@@ -18,85 +19,105 @@ function gracePeriodEndingAt(endsAt: Date): GracePeriod {
   return GracePeriod.from(requestedAt);
 }
 
-describe("DeletionState machine", () => {
-  describe("requestDeletion", () => {
-    it("transitions none → pending", () => {
+describe("DeletionState machine (spec ACTIVE / GRACE_PERIOD / DELETED)", () => {
+  describe("requestDeletion — ACTIVE → GRACE_PERIOD", () => {
+    it("transitions ACTIVE → GRACE_PERIOD", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = requestDeletion("none", grace);
+      const result = requestDeletion("ACTIVE", grace);
       expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value).toBe("pending");
+      if (result.ok) expect(result.value).toBe("GRACE_PERIOD");
     });
 
-    it("transitions cancelled → pending (new request after cancellation is valid)", () => {
+    it("rejects double request from GRACE_PERIOD", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = requestDeletion("cancelled", grace);
-      expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value).toBe("pending");
-    });
-
-    it("rejects transition from pending → pending", () => {
-      const grace = gracePeriodEndingAt(FUTURE);
-      const result = requestDeletion("pending", grace);
+      const result = requestDeletion("GRACE_PERIOD", grace);
       expect(result.ok).toBe(false);
     });
 
-    it("rejects transition from executed → pending", () => {
+    it("rejects any request from DELETED (terminal)", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = requestDeletion("executed", grace);
+      const result = requestDeletion("DELETED", grace);
       expect(result.ok).toBe(false);
     });
   });
 
-  describe("cancelDeletion", () => {
-    it("transitions pending → cancelled when grace period has not expired", () => {
+  describe("cancelDeletion — GRACE_PERIOD → ACTIVE (user-initiated)", () => {
+    it("transitions GRACE_PERIOD → ACTIVE when grace period has not expired", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = cancelDeletion("pending", grace, NOW);
+      const result = cancelDeletion("GRACE_PERIOD", grace, NOW);
       expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value).toBe("cancelled");
+      if (result.ok) expect(result.value).toBe("ACTIVE");
     });
 
     it("rejects cancellation when grace period has expired", () => {
       const grace = gracePeriodEndingAt(PAST);
-      const result = cancelDeletion("pending", grace, NOW);
+      const result = cancelDeletion("GRACE_PERIOD", grace, NOW);
       expect(result.ok).toBe(false);
     });
 
-    it("rejects cancellation from 'none' state", () => {
+    it("rejects double-cancel (from ACTIVE)", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = cancelDeletion("none" as DeletionState, grace, NOW);
+      const result = cancelDeletion("ACTIVE" as DeletionState, grace, NOW);
       expect(result.ok).toBe(false);
     });
 
-    it("rejects cancellation from 'executed' state", () => {
+    it("rejects cancellation after execution (from DELETED)", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = cancelDeletion("executed" as DeletionState, grace, NOW);
+      const result = cancelDeletion("DELETED" as DeletionState, grace, NOW);
       expect(result.ok).toBe(false);
     });
   });
 
-  describe("executeDeletion", () => {
-    it("transitions pending → executed when grace period has expired", () => {
-      const grace = gracePeriodEndingAt(PAST);
-      const result = executeDeletion("pending", grace, NOW);
-      expect(result.ok).toBe(true);
-      if (result.ok) expect(result.value).toBe("executed");
-    });
-
-    it("rejects execution when grace period has NOT expired yet", () => {
+  describe("reactivateDeletion — GRACE_PERIOD → ACTIVE (guarded by canReactivate)", () => {
+    it("transitions GRACE_PERIOD → ACTIVE while the grace window can still reactivate", () => {
       const grace = gracePeriodEndingAt(FUTURE);
-      const result = executeDeletion("pending", grace, NOW);
+      const result = reactivateDeletion("GRACE_PERIOD", grace, NOW);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe("ACTIVE");
+    });
+
+    it("rejects reactivation once the grace window can no longer reactivate (expired)", () => {
+      const grace = gracePeriodEndingAt(PAST);
+      const result = reactivateDeletion("GRACE_PERIOD", grace, NOW);
       expect(result.ok).toBe(false);
     });
 
-    it("rejects execution from 'none' state", () => {
-      const grace = gracePeriodEndingAt(PAST);
-      const result = executeDeletion("none" as DeletionState, grace, NOW);
+    it("rejects reactivation from ACTIVE (nothing to reactivate)", () => {
+      const grace = gracePeriodEndingAt(FUTURE);
+      const result = reactivateDeletion("ACTIVE" as DeletionState, grace, NOW);
       expect(result.ok).toBe(false);
     });
 
-    it("rejects execution from 'cancelled' state", () => {
+    it("rejects reactivation from DELETED (terminal)", () => {
+      const grace = gracePeriodEndingAt(FUTURE);
+      const result = reactivateDeletion("DELETED" as DeletionState, grace, NOW);
+      expect(result.ok).toBe(false);
+    });
+  });
+
+  describe("executeDeletion — GRACE_PERIOD → DELETED", () => {
+    it("transitions GRACE_PERIOD → DELETED when grace period has expired", () => {
       const grace = gracePeriodEndingAt(PAST);
-      const result = executeDeletion("cancelled" as DeletionState, grace, NOW);
+      const result = executeDeletion("GRACE_PERIOD", grace, NOW);
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value).toBe("DELETED");
+    });
+
+    it("rejects execution before the grace period expires", () => {
+      const grace = gracePeriodEndingAt(FUTURE);
+      const result = executeDeletion("GRACE_PERIOD", grace, NOW);
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects execution from ACTIVE state", () => {
+      const grace = gracePeriodEndingAt(PAST);
+      const result = executeDeletion("ACTIVE" as DeletionState, grace, NOW);
+      expect(result.ok).toBe(false);
+    });
+
+    it("rejects any transition FROM DELETED (terminal): execute", () => {
+      const grace = gracePeriodEndingAt(PAST);
+      const result = executeDeletion("DELETED" as DeletionState, grace, NOW);
       expect(result.ok).toBe(false);
     });
   });

@@ -26,7 +26,7 @@ function makeFakeAuthPort(overrides: Partial<AuthPort> = {}): AuthPort {
 
 function makeFakeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPort {
   return {
-    getState: vi.fn().mockResolvedValue(ok("none")),
+    getState: vi.fn().mockResolvedValue(ok("ACTIVE")),
     request: vi.fn().mockResolvedValue(ok(fakeGracePeriod)),
     cancel: vi.fn().mockResolvedValue(ok(undefined)),
     ...overrides,

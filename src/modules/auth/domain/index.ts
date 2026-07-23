@@ -4,6 +4,7 @@ export {
   type DeletionState,
   requestDeletion,
   cancelDeletion,
+  reactivateDeletion,
   executeDeletion,
 } from "./deletion-state";
 export { type Email, email } from "./email";
