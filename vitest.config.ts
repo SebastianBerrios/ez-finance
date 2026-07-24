@@ -33,7 +33,11 @@ export default defineConfig({
           name: "components",
           environment: "jsdom",
           setupFiles: ["./vitest.setup.ts"],
-          include: ["src/**/ui/**/*.test.{ts,tsx}"],
+          include: [
+            "src/**/ui/**/*.test.{ts,tsx}",
+            // Delivery-layer (app) component tests that need jsdom
+            "src/app/**/*.test.{ts,tsx}",
+          ],
         },
       },
       {

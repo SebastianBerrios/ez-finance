@@ -107,4 +107,38 @@ test.describe("Auth pages smoke tests", () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveURL(/\/login/);
   });
+
+  // Google button smoke tests — verify the button renders on both auth pages.
+  // Does NOT attempt a real Google round-trip (requires provisioned provider).
+  test("/login renders 'Continuar con Google' button", async ({ page }) => {
+    await page.goto("/login");
+
+    const googleButton = page.getByRole("button", {
+      name: /continuar con google/i,
+    });
+    await expect(googleButton).toBeVisible();
+    await expect(googleButton).toBeEnabled();
+  });
+
+  test("/register renders 'Continuar con Google' button", async ({ page }) => {
+    await page.goto("/register");
+
+    const googleButton = page.getByRole("button", {
+      name: /continuar con google/i,
+    });
+    await expect(googleButton).toBeVisible();
+    await expect(googleButton).toBeEnabled();
+  });
+
+  test("/login has a divider 'o' between Google button and email form", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+
+    // Both the Google button and email field must coexist on the page
+    await expect(
+      page.getByRole("button", { name: /continuar con google/i }),
+    ).toBeVisible();
+    await expect(page.getByLabel(/correo electrónico/i)).toBeVisible();
+  });
 });
