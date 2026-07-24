@@ -164,15 +164,53 @@ export class SupabaseAuthAdapter implements AuthPort {
   }
 
   // ---------------------------------------------------------------------------
-  // Google OAuth — stubs for slice 2b
+  // initiateGoogleLogin — starts the OAuth flow server-side.
+  // Returns the authorization URL the browser must navigate to.
+  // skipBrowserRedirect: true tells supabase-js not to redirect (we handle it).
+  // NOTE: Full end-to-end auth requires the Google provider to be configured
+  // in the Supabase project (dashboard > Auth > Providers > Google).
   // ---------------------------------------------------------------------------
   async initiateGoogleLogin(
-    _redirectTo: string,
+    redirectTo: string,
   ): Promise<Result<{ url: string }, AuthError>> {
-    return err({ kind: "Unavailable" });
+    try {
+      const supabase = await createServerClient();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) return err(mapSupabaseError(error));
+      if (!data.url) return err({ kind: "Unavailable" });
+
+      return ok({ url: data.url });
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
   }
 
-  async completeOAuth(_code: string): Promise<Result<SessionRef, AuthError>> {
-    return err({ kind: "Unavailable" });
+  // ---------------------------------------------------------------------------
+  // completeOAuth — exchanges the authorization code for a session.
+  // Called from the /auth/callback route handler after the OAuth redirect.
+  // Uses the server client (SSR cookie-based session management).
+  // ---------------------------------------------------------------------------
+  async completeOAuth(code: string): Promise<Result<SessionRef, AuthError>> {
+    try {
+      const supabase = await createServerClient();
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+      if (error) return err(mapSupabaseError(error));
+      if (!data.session) return err({ kind: "AuthenticationFailed" });
+
+      return ok({
+        userId: data.session.user.id,
+        accessToken: data.session.access_token,
+      });
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
   }
 }
