@@ -17,6 +17,13 @@ export default defineConfig({
           include: [
             "src/**/domain/**/*.test.ts",
             "src/**/application/**/*.test.ts",
+            // Infrastructure unit tests (pure mapping logic, no live Supabase needed)
+            "src/**/infrastructure/**/*.test.ts",
+          ],
+          // Exclude integration tests that require a live Supabase stack
+          exclude: [
+            "**/*.integration.test.ts",
+            "**/node_modules/**",
           ],
         },
       },
@@ -29,10 +36,24 @@ export default defineConfig({
           include: ["src/**/ui/**/*.test.{ts,tsx}"],
         },
       },
+      {
+        extends: true,
+        test: {
+          // Integration tests require a live local Supabase stack (SUPABASE_TEST_URL).
+          // Run with: pnpm test:integration
+          // NOT included in the default pnpm test gate.
+          name: "integration",
+          environment: "node",
+          include: ["src/**/*.integration.test.ts"],
+        },
+      },
     ],
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
+      // Coverage thresholds scoped to domain + application only.
+      // Infrastructure adapters require a live Supabase stack for full
+      // integration coverage and are excluded from the 100%/80% gates.
       include: ["src/**/domain/**", "src/**/application/**"],
       exclude: ["**/*.test.*", "**/index.ts", "**/*.d.ts"],
       thresholds: {
