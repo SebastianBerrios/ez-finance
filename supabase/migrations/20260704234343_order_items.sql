@@ -1,0 +1,5 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only oasis's own migrations. oasis does
+-- not own or maintain this migration. See D:\Programming\Frontend\CLAUDE.md.
