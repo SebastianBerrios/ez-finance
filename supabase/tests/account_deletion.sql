@@ -380,8 +380,8 @@ and    m.user_id = '11111111-0000-4000-8000-000000000011'
 
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions() = 1,
-  'batch worker finalizes exactly the one DUE request'
+  ez_finance.process_due_deletions() = jsonb_build_object('finalized', 1, 'skipped', 0, 'contended', 0),
+  'batch worker finalizes exactly the one DUE request and reports it'
 );
 
 select pg_temp.as_postgres();
@@ -410,7 +410,7 @@ select pg_temp.check(
 -- Idempotent: nothing left due.
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions() = 0,
+  ez_finance.process_due_deletions() = jsonb_build_object('finalized', 0, 'skipped', 0, 'contended', 0),
   'a second batch run finalizes nothing'
 );
 
@@ -477,7 +477,7 @@ and    cancelled_at is null and finalized_at is null;
 
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions() = 1,
+  (ez_finance.process_due_deletions() ->> 'finalized')::int = 1,
   'batch worker finalizes F'
 );
 
@@ -514,7 +514,7 @@ and    cancelled_at is null and finalized_at is null;
 
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions() = 1,
+  (ez_finance.process_due_deletions() ->> 'finalized')::int = 1,
   'batch worker finalizes H'
 );
 
@@ -614,11 +614,17 @@ select pg_temp.check(
 -- ===========================================================================
 -- 20. p_limit actually bounds the batch. See 20260725164259.
 -- ===========================================================================
+-- FIVE due requests, not three. `process_due_deletions(2)` then leaves THREE
+-- behind, so the follow-up assertion distinguishes "p_limit 0 fell back to the
+-- default" from "p_limit 0 fell back to any positive number" — with a single
+-- leftover row the check passed for a fallback of 1 too.
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 values
   ('66666666-0000-4000-8000-000000000016', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'i@test.local', '', now(), now(), now()),
   ('77777777-0000-4000-8000-000000000017', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'j@test.local', '', now(), now(), now()),
-  ('88888888-0000-4000-8000-000000000018', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'k@test.local', '', now(), now(), now());
+  ('88888888-0000-4000-8000-000000000018', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'k@test.local', '', now(), now(), now()),
+  ('99999999-0000-4000-8000-000000000021', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'l@test.local', '', now(), now(), now()),
+  ('99999999-0000-4000-8000-000000000022', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'm@test.local', '', now(), now(), now());
 
 select pg_temp.as_user('66666666-0000-4000-8000-000000000016');
 select ez_finance.bootstrap();
@@ -629,6 +635,12 @@ select ez_finance.request_account_deletion();
 select pg_temp.as_user('88888888-0000-4000-8000-000000000018');
 select ez_finance.bootstrap();
 select ez_finance.request_account_deletion();
+select pg_temp.as_user('99999999-0000-4000-8000-000000000021');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+select pg_temp.as_user('99999999-0000-4000-8000-000000000022');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
 
 select pg_temp.as_postgres();
 update ez_finance_private.deletion_requests
@@ -636,21 +648,23 @@ set    ends_at = now() - interval '1 second'
 where  user_id in (
   '66666666-0000-4000-8000-000000000016',
   '77777777-0000-4000-8000-000000000017',
-  '88888888-0000-4000-8000-000000000018'
+  '88888888-0000-4000-8000-000000000018',
+  '99999999-0000-4000-8000-000000000021',
+  '99999999-0000-4000-8000-000000000022'
 )
 and    cancelled_at is null and finalized_at is null;
 
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions(2) = 2,
+  (ez_finance.process_due_deletions(2) ->> 'finalized')::int = 2,
   'p_limit bounds the batch to two requests'
 );
 
 -- p_limit <= 0 means "unspecified", NOT "do nothing". Clamping to zero made
 -- process_due_deletions(0) return 0 forever and look like "nothing was due".
 select pg_temp.check(
-  ez_finance.process_due_deletions(0) = 1,
-  'p_limit 0 falls back to the default instead of clamping to zero'
+  (ez_finance.process_due_deletions(0) ->> 'finalized')::int = 3,
+  'p_limit 0 falls back to the default and drains all three leftovers'
 );
 
 -- ===========================================================================
@@ -701,8 +715,8 @@ create trigger ez_finance_test_poison
 
 select pg_temp.as_service_role();
 select pg_temp.check(
-  ez_finance.process_due_deletions() = 1,
-  'a poison row is skipped and the rest of the batch still finalizes'
+  ez_finance.process_due_deletions() = jsonb_build_object('finalized', 1, 'skipped', 1, 'contended', 0),
+  'a poison row is skipped, REPORTED, and the rest of the batch still finalizes'
 );
 
 select pg_temp.as_postgres();
@@ -719,13 +733,20 @@ drop trigger ez_finance_test_poison on ez_finance.profiles;
 drop function public.ez_finance_test_poison();
 
 -- ===========================================================================
--- 22. The batch worker refuses any JWT role other than service_role, IN THE
+-- 22. The batch worker refuses any caller that is not service_role, IN THE
 --     BODY — not only at the grant. One re-run of the fleet onboarding step
 --     ("grant all on routines in schema ez_finance to anon, authenticated,
 --     service_role") would otherwise hand the public anon key a 1000-account
 --     erasure endpoint. That default already fired once on this schema.
+--
+--     So this section RE-RUNS THAT EXACT GRANT first. Without it every refusal
+--     below comes from the missing EXECUTE privilege and the body guard is
+--     never reached — the grant, not the guard, is what the assertions would be
+--     pinning.
 -- ===========================================================================
 select pg_temp.as_postgres();
+
+grant execute on function ez_finance.process_due_deletions(int) to anon, authenticated;
 
 do $$
 begin
@@ -749,7 +770,36 @@ exception
 end;
 $$;
 
+-- THE CASE THE OLD GUARD SKIPPED ENTIRELY. It only ran the role check when
+-- request.jwt.claims was non-empty, so a caller with NO claims — exactly what a
+-- raw connection reaching the re-granted function looks like — walked straight
+-- through the defence-in-depth check.
+do $$
+begin
+  perform set_config('request.jwt.claims', '', false);
+  perform set_config('role', 'authenticated', false);
+  perform ez_finance.process_due_deletions();
+  raise exception 'FAIL: `set role authenticated` with no claims must not run the batch worker';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: role authenticated with NO claims refused in the function body';
+end;
+$$;
+
+do $$
+begin
+  perform set_config('request.jwt.claims', '', false);
+  perform set_config('role', 'anon', false);
+  perform ez_finance.process_due_deletions();
+  raise exception 'FAIL: `set role anon` with no claims must not run the batch worker';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: role anon with NO claims refused in the function body';
+end;
+$$;
+
 select pg_temp.as_postgres();
+revoke execute on function ez_finance.process_due_deletions(int) from anon, authenticated;
 
 -- A service_role JWT is accepted (this is the Edge Function / cron caller).
 do $$
@@ -759,6 +809,14 @@ begin
   raise notice 'PASS: a service_role JWT is accepted';
 end;
 $$;
+
+-- A direct owner connection with no JWT at all is accepted (psql, a migration,
+-- a maintenance script).
+select pg_temp.as_postgres();
+select pg_temp.check(
+  (ez_finance.process_due_deletions() ->> 'finalized')::int = 0,
+  'a direct owner connection with no claims is accepted'
+);
 
 select pg_temp.as_postgres();
 

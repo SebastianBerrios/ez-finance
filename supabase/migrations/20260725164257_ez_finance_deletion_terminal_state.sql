@@ -235,6 +235,12 @@ grant  execute on function ez_finance.acknowledge_deletion() to authenticated;
 
 revoke execute on function ez_finance.deletion_state() from public, anon;
 grant  execute on function ez_finance.deletion_state() to authenticated;
-grant  execute on function ez_finance.bootstrap()      to authenticated;
+
+-- bootstrap() gets the same treatment, and it was the one routine on the
+-- deletion path still carrying the PUBLIC ACL entry: it was re-granted to
+-- `authenticated` but never revoked from public/anon, so the exact trap
+-- 20260725130000 exists to close was still open on it.
+revoke execute on function ez_finance.bootstrap() from public, anon;
+grant  execute on function ez_finance.bootstrap() to authenticated;
 
 commit;
