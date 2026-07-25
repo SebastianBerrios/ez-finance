@@ -31,6 +31,13 @@ export async function bootstrapUserWorkspace(): Promise<
     if (userError) return err(mapSupabaseError(userError));
     if (!user) return err({ kind: "SessionExpired" });
 
+    // Pull-based deletion finalization (pg_cron is not available in the shared
+    // project). This MUST run before bootstrap(): if a due request finalized
+    // after the bootstrap, it would erase the profile that bootstrap just
+    // recreated. A transient failure here is non-fatal — the request stays
+    // pending and the next authenticated entry retries it.
+    await supabase.rpc("process_deletion_if_due");
+
     // Call the bootstrap RPC — returns uuid (workspace_id)
     const { data, error } = await supabase.rpc("bootstrap");
 

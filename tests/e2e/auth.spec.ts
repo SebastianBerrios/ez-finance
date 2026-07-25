@@ -183,6 +183,38 @@ test.describe("Auth pages smoke tests", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
+  // -------------------------------------------------------------------------
+  // Account lifecycle: export + deletion (Fase 2c tramo B)
+  // -------------------------------------------------------------------------
+
+  test("/app/settings/account redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/account");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("the data export route is not reachable without a session", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/account/export");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/login explains the pending deletion after a deletion request", async ({
+    page,
+  }) => {
+    await page.goto("/login?deletion=requested");
+
+    await expect(page.getByRole("status")).toContainText(/30 días/i);
+  });
+
+  test("/login shows no deletion notice on a normal visit", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(page.getByRole("status")).toHaveCount(0);
+  });
+
   test("/set-password renders in Spanish and is responsive at 360px", async ({
     page,
   }) => {
