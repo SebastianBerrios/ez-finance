@@ -8,7 +8,9 @@ import {
 } from "./cancel-deletion-form";
 
 function makeAction(state: CancelDeletionFormState = {}) {
-  return vi.fn(async () => state);
+  return vi.fn(
+    async (_prev: CancelDeletionFormState, _formData: FormData) => state,
+  );
 }
 
 describe("CancelDeletionForm", () => {

@@ -40,6 +40,16 @@ const settingsSections = [
       },
     ],
   },
+  {
+    title: "Datos y cuenta",
+    items: [
+      {
+        href: "/app/settings/account",
+        label: "Datos y cuenta",
+        description: "Exportá tus datos o eliminá tu cuenta",
+      },
+    ],
+  },
 ];
 
 export default function SettingsPage() {

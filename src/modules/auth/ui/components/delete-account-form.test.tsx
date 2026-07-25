@@ -8,7 +8,9 @@ import {
 } from "./delete-account-form";
 
 function makeAction(state: DeleteAccountFormState = {}) {
-  return vi.fn(async () => state);
+  return vi.fn(
+    async (_prev: DeleteAccountFormState, _formData: FormData) => state,
+  );
 }
 
 describe("DeleteAccountForm", () => {
@@ -61,8 +63,8 @@ describe("DeleteAccountForm", () => {
     await user.click(screen.getByRole("button", { name: /eliminar mi cuenta/i }));
 
     expect(action).toHaveBeenCalledTimes(1);
-    const formData = action.mock.calls[0]?.[1] as FormData;
-    expect(formData.get("confirm")).toBe("ELIMINAR");
+    const formData = action.mock.calls[0]?.[1];
+    expect(formData?.get("confirm")).toBe("ELIMINAR");
   });
 
   it("shows no alert before the first submit", () => {

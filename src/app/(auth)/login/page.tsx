@@ -8,12 +8,32 @@ export const metadata: Metadata = {
   title: "Ingresar — ez finance",
 };
 
-export default function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ deletion?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  // Set after a deletion request closes every session: without this note the
+  // user lands on a bare login screen right after a destructive action.
+  const { deletion } = await searchParams;
+
   return (
     <>
       <h2 className="text-foreground mb-6 text-center text-xl font-semibold">
         Ingresá a tu cuenta
       </h2>
+
+      {deletion === "requested" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-muted mb-4 rounded-lg px-4 py-3 text-sm"
+        >
+          Programamos la eliminación de tu cuenta y cerramos tus sesiones.
+          Tenés 30 días para volver a ingresar y cancelarla desde Configuración
+          → Datos y cuenta.
+        </div>
+      )}
 
       {/* Google OAuth — requires Google provider configured in Supabase dashboard */}
       <GoogleButton />
