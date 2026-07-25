@@ -446,4 +446,96 @@ exception
 end;
 $$;
 
+-- ===========================================================================
+-- 17. A tombstone is NOT another member. See 20260725152507, defect 1.
+--     F's personal workspace also holds a NULL row left by an earlier peer
+--     deletion; it must not keep the workspace alive.
+-- ===========================================================================
+select pg_temp.as_postgres();
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values ('44444444-0000-4000-8000-000000000014', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'f@test.local', '', now(), now(), now());
+
+select pg_temp.as_user('44444444-0000-4000-8000-000000000014');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+select pg_temp.as_postgres();
+select w.id as f_personal_ws
+from   ez_finance.workspaces w
+join   ez_finance.workspace_members m on m.workspace_id = w.id
+where  w.type    = 'personal'
+and    m.user_id = '44444444-0000-4000-8000-000000000014'
+\gset
+
+insert into ez_finance.workspace_members (workspace_id, user_id, display_name_snapshot, role)
+values (:'f_personal_ws', null, 'Peer eliminado', 'member');
+
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id = '44444444-0000-4000-8000-000000000014'
+and    cancelled_at is null and finalized_at is null;
+
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions() = 1,
+  'batch worker finalizes F'
+);
+
+select pg_temp.as_postgres();
+select pg_temp.check(
+  not exists (select 1 from ez_finance.workspaces where id = :'f_personal_ws'),
+  'personal workspace holding only a tombstone peer is removed'
+);
+
+-- ===========================================================================
+-- 18. A shared workspace with no live members left is erased, not orphaned.
+--     See 20260725152507, defect 2: workspace_ids_for_current_user() resolves
+--     by user_id, so a tombstone-only workspace is unreachable forever.
+-- ===========================================================================
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values ('55555555-0000-4000-8000-000000000015', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'h@test.local', '', now(), now(), now());
+
+select pg_temp.as_user('55555555-0000-4000-8000-000000000015');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+select pg_temp.as_postgres();
+insert into ez_finance.workspaces (id, name, type)
+values ('dddddddd-0000-4000-8000-000000000004', 'Zombie', 'shared');
+insert into ez_finance.workspace_members (workspace_id, user_id, display_name_snapshot, role)
+values
+  ('dddddddd-0000-4000-8000-000000000004', '55555555-0000-4000-8000-000000000015', 'Hugo', 'owner'),
+  ('dddddddd-0000-4000-8000-000000000004', null, 'Peer eliminado', 'member');
+
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id = '55555555-0000-4000-8000-000000000015'
+and    cancelled_at is null and finalized_at is null;
+
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions() = 1,
+  'batch worker finalizes H'
+);
+
+select pg_temp.as_postgres();
+select pg_temp.check(
+  not exists (
+    select 1 from ez_finance.workspaces
+    where id = 'dddddddd-0000-4000-8000-000000000004'
+  ),
+  'shared workspace left with only tombstones is erased'
+);
+select pg_temp.check(
+  not exists (
+    select 1 from ez_finance.workspace_members
+    where workspace_id = 'dddddddd-0000-4000-8000-000000000004'
+  ),
+  'its membership rows go with it'
+);
+select pg_temp.check(
+  exists (select 1 from ez_finance.workspaces where id = 'cccccccc-0000-4000-8000-000000000003'),
+  'a shared workspace that still has a live member is untouched'
+);
+
 \echo 'ALL CHECKS PASSED'
