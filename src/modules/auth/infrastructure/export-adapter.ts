@@ -6,7 +6,7 @@
 // archive to their data — the adapter never uses a service key and never
 // widens visibility. Fase 3+ datasets (accounts, categories, transactions)
 // plug in by adding entries to DATASETS.
-import { strToU8, zipSync } from "fflate";
+import { type Zippable, strToU8, zip } from "fflate";
 
 import {
   type ExportArtifact,
@@ -66,10 +66,23 @@ Los archivos .json conservan los tipos originales; los .csv se pueden abrir
 con cualquier planilla de cálculo.
 `;
 
+/**
+ * Excel, LibreOffice and Google Sheets evaluate a cell whose FIRST character is
+ * one of these as a formula — and LEEME.txt tells the user to open these files
+ * in a spreadsheet. A display_name of `=HYPERLINK(...)` or `@SUM(...)` coming
+ * from another workspace member would then execute on open. RFC 4180 quoting
+ * does not help: the quotes are stripped before the value is interpreted.
+ */
+const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
+
 /** RFC 4180 quoting: only when needed, doubling embedded quotes. */
 function toCsvValue(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const text = typeof value === "string" ? value : String(value);
+  const raw = typeof value === "string" ? value : String(value);
+  // A leading apostrophe is the standard neutraliser: spreadsheets read the
+  // cell as literal text and do not render the quote. The .json files keep the
+  // untouched value, so nothing is lost from the export.
+  const text = CSV_FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
   if (/[",\n\r]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
@@ -87,6 +100,20 @@ function toCsv(columns: readonly string[], rows: readonly Row[]): string {
 /** YYYY-MM-DD in UTC — stable regardless of the server's timezone. */
 function exportDate(now: Date): string {
   return now.toISOString().slice(0, 10);
+}
+
+/**
+ * fflate's async zip, promisified. NOT zipSync: this runs inside a request
+ * handler, and deflating the whole archive on the main thread blocks the event
+ * loop for every other in-flight request on the instance.
+ */
+function zipAsync(files: Zippable): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    zip(files, (error, data) => {
+      if (error) reject(error);
+      else resolve(data);
+    });
+  });
 }
 
 export class ExportAdapter implements ExportPort {
@@ -112,9 +139,15 @@ export class ExportAdapter implements ExportPort {
 
       if (workspacesError) return err(mapSupabaseError(workspacesError));
 
+      // Explicitly scoped to the caller. RLS alone is NOT enough here: the
+      // workspace_members SELECT policy deliberately exposes every member of a
+      // workspace you belong to, so an unfiltered read would ship the other
+      // members' fleet-wide auth UUIDs, names and roles inside an archive
+      // documented as "Tus membresías".
       const { data: members, error: membersError } = await schema
         .from("workspace_members")
-        .select(MEMBER_COLUMNS.join(", "));
+        .select(MEMBER_COLUMNS.join(", "))
+        .eq("user_id", userId);
 
       if (membersError) return err(mapSupabaseError(membersError));
 
@@ -125,7 +158,7 @@ export class ExportAdapter implements ExportPort {
       const workspaceRows = (workspaces ?? []) as unknown as Row[];
       const memberRows = (members ?? []) as unknown as Row[];
 
-      const archive = zipSync({
+      const archive = await zipAsync({
         "LEEME.txt": strToU8(README),
         "perfil.json": strToU8(JSON.stringify(profileRow, null, 2)),
         "perfil.csv": strToU8(toCsv(PROFILE_COLUMNS, [profileRow])),

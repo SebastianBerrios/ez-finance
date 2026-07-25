@@ -32,9 +32,11 @@ export async function GET(request: Request) {
 
   const { filename, bytes, contentType } = result.value;
 
-  // Uint8Array.from re-anchors the view to a plain ArrayBuffer, which is what
-  // BlobPart requires (the fflate output is typed over ArrayBufferLike).
-  const body = bytes instanceof Uint8Array ? new Blob([Uint8Array.from(bytes)]) : bytes;
+  // slice() re-anchors the view to a plain ArrayBuffer, which is what BodyInit
+  // requires (the fflate output is typed over ArrayBufferLike). It is a single
+  // memcpy — unlike `new Blob([Uint8Array.from(bytes)])`, which walked the
+  // archive element by element and then copied it a second time into the Blob.
+  const body: BodyInit = bytes instanceof Uint8Array ? bytes.slice() : bytes;
 
   return new NextResponse(body, {
     headers: {

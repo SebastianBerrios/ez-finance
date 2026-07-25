@@ -52,10 +52,24 @@ interface TableResult {
   error?: unknown;
 }
 
-/** Minimal PostgREST builder stub: awaitable after select(), plus .single(). */
-function tableStub({ rows = [], single = null, error = null }: TableResult) {
+/** A recorded `.eq(column, value)` call, so the test can see the WHERE clause. */
+type RecordedFilter = [column: string, value: unknown];
+
+/**
+ * Minimal PostgREST builder stub: awaitable after select(), plus .single().
+ * It RECORDS every .eq() instead of swallowing it — a stub that returns itself
+ * makes the filters invisible, and "the archive only contains the caller's own
+ * rows" is the whole security contract of this adapter.
+ */
+function tableStub(
+  { rows = [], single = null, error = null }: TableResult,
+  record: (filter: RecordedFilter) => void,
+) {
   const builder = {
-    eq: () => builder,
+    eq: (column: string, value: unknown) => {
+      record([column, value]);
+      return builder;
+    },
     single: async () => ({ data: single, error }),
     then: (
       resolve: (v: { data: unknown; error: unknown }) => unknown,
@@ -65,6 +79,9 @@ function tableStub({ rows = [], single = null, error = null }: TableResult) {
   return { select: () => builder };
 }
 
+/** Filters observed per table during the last exportUserData() call. */
+let filters: Record<string, RecordedFilter[]>;
+
 /** Wire the three tables the export reads, in any order. */
 function wireTables(overrides: Record<string, TableResult> = {}) {
   const tables: Record<string, TableResult> = {
@@ -73,8 +90,12 @@ function wireTables(overrides: Record<string, TableResult> = {}) {
     workspace_members: { rows: MEMBER_ROWS },
     ...overrides,
   };
+  filters = {};
   mockSchema.mockReturnValue({
-    from: (table: string) => tableStub(tables[table] ?? {}),
+    from: (table: string) =>
+      tableStub(tables[table] ?? {}, (filter) => {
+        (filters[table] ??= []).push(filter);
+      }),
   });
 }
 
@@ -147,6 +168,94 @@ describe("ExportAdapter.exportUserData", () => {
     expect(csv[0]).toBe("id,name,type,created_at,archived_at,deleted_at");
     expect(csv[1]).toContain("Personal");
     expect(csv).toHaveLength(2);
+  });
+
+  it("scopes every dataset read to the caller", async () => {
+    // workspace_members is the dangerous one: its RLS policy deliberately
+    // exposes ALL members of a workspace you belong to, so without an explicit
+    // filter the archive ships other people's auth UUIDs, names and roles.
+    // workspaces carries no filter by design — RLS already limits it to the
+    // workspaces the caller is a member of, and there is no user column.
+    await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(filters["profiles"]).toEqual([["id", USER_ID]]);
+    expect(filters["workspace_members"]).toEqual([["user_id", USER_ID]]);
+    expect(filters["workspaces"]).toBeUndefined();
+  });
+
+  it("neutralizes values a spreadsheet would run as a formula", async () => {
+    // LEEME.txt tells the user to open these in a spreadsheet, and a member
+    // name is attacker-controlled text from another user.
+    wireTables({
+      workspace_members: {
+        rows: [
+          {
+            member_id: "m-1",
+            workspace_id: "ws-1",
+            user_id: USER_ID,
+            display_name_snapshot: '=HYPERLINK("http://evil.test","click")',
+            role: "owner",
+            joined_at: "2026-07-01T10:00:00+00:00",
+          },
+          {
+            member_id: "m-2",
+            workspace_id: "ws-1",
+            user_id: USER_ID,
+            display_name_snapshot: "@SUM(1+1)",
+            role: "member",
+            joined_at: "2026-07-01T10:00:00+00:00",
+          },
+          {
+            member_id: "m-3",
+            workspace_id: "ws-1",
+            user_id: USER_ID,
+            display_name_snapshot: "+49 351 0000",
+            role: "member",
+            joined_at: "2026-07-01T10:00:00+00:00",
+          },
+          {
+            member_id: "m-4",
+            workspace_id: "ws-1",
+            user_id: USER_ID,
+            display_name_snapshot: "-1234",
+            role: "member",
+            joined_at: "2026-07-01T10:00:00+00:00",
+          },
+          {
+            member_id: "m-5",
+            workspace_id: "ws-1",
+            user_id: USER_ID,
+            display_name_snapshot: "\t=1+1",
+            role: "member",
+            joined_at: "2026-07-01T10:00:00+00:00",
+          },
+        ],
+      },
+    });
+
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const zip = readZip(result.value.bytes);
+    const csv = zip.text("membresias.csv");
+
+    expect(csv).toContain(`'=HYPERLINK(""http://evil.test"",""click"")`);
+    expect(csv).toContain("'@SUM(1+1)");
+    expect(csv).toContain("'+49 351 0000");
+    expect(csv).toContain("'-1234");
+    expect(csv).toContain("'\t=1+1");
+    expect(csv).not.toMatch(/(^|,)=/m);
+    expect(csv).not.toMatch(/(^|,)@/m);
+
+    // The JSON mirror keeps the untouched value: nothing is lost, only the
+    // spreadsheet rendering is made inert.
+    const parsed = JSON.parse(zip.text("membresias.json")) as Array<{
+      display_name_snapshot: string;
+    }>;
+    expect(parsed[0]?.display_name_snapshot).toBe(
+      '=HYPERLINK("http://evil.test","click")',
+    );
   });
 
   it("escapes CSV values containing commas, quotes and newlines", async () => {
