@@ -4,6 +4,7 @@
 // Uses getUser() first per vercel-react-best-practices (server-auth-actions).
 import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { type Result, err, ok } from "@/shared/domain/result";
+import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 
 import { mapSupabaseError } from "./error-map";
@@ -36,11 +37,10 @@ export async function bootstrapUserWorkspace(): Promise<
   try {
     const supabase = await createServerClient();
 
-    // Validate authentication server-side first (per server-auth-actions rule)
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    // Validate authentication server-side first (per server-auth-actions rule).
+    // Memoized per request so the page this layout wraps does not pay for a
+    // second round trip to the Auth server.
+    const { user, error: userError } = await getAuthenticatedUser();
 
     if (userError) return err(mapSupabaseError(userError));
     if (!user) return err({ kind: "SessionExpired" });

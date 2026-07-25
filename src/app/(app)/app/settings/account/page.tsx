@@ -8,7 +8,7 @@ import { getAccountDeletionStatus } from "@/modules/auth/application/get-account
 import { SupabaseDeletionAdapter } from "@/modules/auth/infrastructure/supabase-deletion-adapter";
 import { CancelDeletionForm } from "@/modules/auth/ui/components/cancel-deletion-form";
 import { DeleteAccountForm } from "@/modules/auth/ui/components/delete-account-form";
-import { createServerClient } from "@/shared/infrastructure/supabase/server";
+import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
 
 export const metadata: Metadata = {
@@ -29,10 +29,10 @@ interface AccountPageProps {
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   const { export: exportFlag } = await searchParams;
 
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Memoized: the (app) layout already resolved the user for this request.
+  // This page used to pay for its own round trip on top of the layout's
+  // bootstrap and sweep.
+  const { user } = await getAuthenticatedUser();
 
   if (!user) {
     redirect("/login");

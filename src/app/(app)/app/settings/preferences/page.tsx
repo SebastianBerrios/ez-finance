@@ -4,7 +4,7 @@ import Link from "next/link";
 import { setPreferencesAction } from "@/app/(app)/actions/set-preferences.action";
 import { SupabaseProfileAdapter } from "@/modules/auth/infrastructure/supabase-profile-adapter";
 import { PreferencesForm } from "@/modules/auth/ui/components/preferences-form";
-import { createServerClient } from "@/shared/infrastructure/supabase/server";
+import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
 
 export const metadata: Metadata = {
@@ -13,10 +13,8 @@ export const metadata: Metadata = {
 
 export default async function PreferencesSettingsPage() {
   // Read current preferences server-side — middleware guarantees authentication.
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Memoized: the (app) layout already resolved the user for this request.
+  const { user } = await getAuthenticatedUser();
 
   const profileAdapter = new SupabaseProfileAdapter();
   const profileResult = user ? await profileAdapter.getProfile(user.id) : null;
