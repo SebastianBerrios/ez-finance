@@ -170,6 +170,19 @@ $$;
 -- ===========================================================================
 -- 9. The sweep finalizes a DUE request — scoped erasure.
 -- ===========================================================================
+-- Capture A's personal workspace id BEFORE the sweep. Asserting "no personal
+-- workspace joins to a member row with user_id = A" is vacuous: the sweep
+-- tombstones every surviving membership (user_id -> NULL), so that join matches
+-- nothing whether or not the workspace was deleted. Only the id proves erasure.
+select pg_temp.as_postgres();
+select w.id as a_personal_ws
+from   ez_finance.workspaces w
+join   ez_finance.workspace_members m on m.workspace_id = w.id
+where  w.type    = 'personal'
+and    m.user_id = 'aaaaaaaa-0000-4000-8000-000000000001'
+\gset
+select pg_temp.as_user('aaaaaaaa-0000-4000-8000-000000000001');
+
 select pg_temp.check(
   ez_finance.process_deletion_if_due() = true,
   'sweep finalizes a due request'
@@ -183,11 +196,7 @@ select pg_temp.check(
 );
 
 select pg_temp.check(
-  not exists (
-    select 1 from ez_finance.workspaces w
-    join ez_finance.workspace_members m on m.workspace_id = w.id
-    where w.type = 'personal' and m.user_id = 'aaaaaaaa-0000-4000-8000-000000000001'
-  ),
+  not exists (select 1 from ez_finance.workspaces where id = :'a_personal_ws'),
   'personal workspace removed'
 );
 
@@ -313,5 +322,128 @@ select pg_temp.check(
   has_function_privilege('authenticated', 'ez_finance.request_account_deletion()', 'execute'),
   'authenticated keeps EXECUTE on the deletion RPCs'
 );
+
+-- ===========================================================================
+-- 15. The out-of-band batch worker. See 20260725152455.
+--
+--     Fixtures: C is due, D is not due, E cancelled their request. None of
+--     them is the caller — the batch RPC runs as service_role, which has no
+--     auth.uid() at all. That is the whole point: the pull-based sweep can
+--     never finalize the common case (request deletion, never come back).
+-- ===========================================================================
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values
+  ('11111111-0000-4000-8000-000000000011', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'c@test.local', '', now(), now(), now()),
+  ('22222222-0000-4000-8000-000000000012', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'd@test.local', '', now(), now(), now()),
+  ('33333333-0000-4000-8000-000000000013', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'e@test.local', '', now(), now(), now());
+
+create or replace function pg_temp.as_service_role() returns void language plpgsql as $$
+begin
+  perform set_config('request.jwt.claims', '', false);
+  perform set_config('role', 'service_role', false);
+end;
+$$;
+
+-- C: due request.
+select pg_temp.as_user('11111111-0000-4000-8000-000000000011');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+-- D: pending but NOT due.
+select pg_temp.as_user('22222222-0000-4000-8000-000000000012');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+-- E: requested, then cancelled.
+select pg_temp.as_user('33333333-0000-4000-8000-000000000013');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+select ez_finance.cancel_account_deletion();
+
+select pg_temp.as_postgres();
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id = '11111111-0000-4000-8000-000000000011'
+and    cancelled_at is null and finalized_at is null;
+
+-- E's cancelled request is backdated too: "cancelled" must beat "due".
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id = '33333333-0000-4000-8000-000000000013';
+
+select w.id as c_personal_ws
+from   ez_finance.workspaces w
+join   ez_finance.workspace_members m on m.workspace_id = w.id
+where  w.type    = 'personal'
+and    m.user_id = '11111111-0000-4000-8000-000000000011'
+\gset
+
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions() = 1,
+  'batch worker finalizes exactly the one DUE request'
+);
+
+select pg_temp.as_postgres();
+
+select pg_temp.check(
+  not exists (select 1 from ez_finance.profiles where id = '11111111-0000-4000-8000-000000000011'),
+  'batch worker erased a profile it does not own the session of'
+);
+select pg_temp.check(
+  not exists (select 1 from ez_finance.workspaces where id = :'c_personal_ws'),
+  'batch worker removed the personal workspace of a non-caller'
+);
+select pg_temp.check(
+  exists (select 1 from ez_finance.profiles where id = '22222222-0000-4000-8000-000000000012'),
+  'batch worker skips a not-yet-due request'
+);
+select pg_temp.check(
+  exists (select 1 from ez_finance.profiles where id = '33333333-0000-4000-8000-000000000013'),
+  'batch worker skips a cancelled request'
+);
+select pg_temp.check(
+  exists (select 1 from auth.users where id = '11111111-0000-4000-8000-000000000011'),
+  'batch worker never deletes the shared auth.users row'
+);
+
+-- Idempotent: nothing left due.
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions() = 0,
+  'a second batch run finalizes nothing'
+);
+
+-- ===========================================================================
+-- 16. The batch worker is service_role ONLY. It finalizes arbitrary accounts
+--     without a session, so authenticated reaching it would be a mass-deletion
+--     primitive.
+-- ===========================================================================
+select pg_temp.as_postgres();
+
+select pg_temp.check(
+  not has_function_privilege('anon', 'ez_finance.process_due_deletions(int)', 'execute')
+  and not has_function_privilege('authenticated', 'ez_finance.process_due_deletions(int)', 'execute'),
+  'neither anon nor authenticated has EXECUTE on the batch worker'
+);
+select pg_temp.check(
+  has_function_privilege('service_role', 'ez_finance.process_due_deletions(int)', 'execute'),
+  'service_role can execute the batch worker'
+);
+select pg_temp.check(
+  has_function_privilege('service_role', 'ez_finance_private.finalize_deletion(uuid)', 'execute'),
+  'service_role can reach the private finalize helper (the documented escape hatch)'
+);
+
+select pg_temp.as_user('bbbbbbbb-0000-4000-8000-000000000002');
+do $$
+begin
+  perform ez_finance.process_due_deletions();
+  raise exception 'FAIL: authenticated must not run the batch worker';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: batch worker is not callable by authenticated';
+end;
+$$;
 
 \echo 'ALL CHECKS PASSED'
