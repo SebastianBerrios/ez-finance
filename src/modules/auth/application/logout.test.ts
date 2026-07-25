@@ -28,6 +28,14 @@ describe("logout use case", () => {
     expect(auth.logout).toHaveBeenCalledOnce();
   });
 
+  it("signs out only this browser, never the whole fleet", async () => {
+    // mvp-lab shares auth.users with fast_route and oasis: a "global" scope
+    // would revoke their refresh tokens too.
+    const auth = makeFakeAuthPort();
+    await logout({ auth });
+    expect(auth.logout).toHaveBeenCalledWith("local");
+  });
+
   it("propagates port errors", async () => {
     const auth = makeFakeAuthPort({
       logout: vi.fn().mockResolvedValue({ ok: false, error: { kind: "SessionExpired" } }),

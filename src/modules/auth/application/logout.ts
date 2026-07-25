@@ -10,5 +10,7 @@ interface LogoutDeps {
 export async function logout(
   deps: LogoutDeps,
 ): Promise<Result<void, AuthError>> {
-  return deps.auth.logout();
+  // "local": signing out of ez finance must not revoke the sessions the same
+  // auth.users row holds for the other mvp-lab apps. See LogoutScope.
+  return deps.auth.logout("local");
 }

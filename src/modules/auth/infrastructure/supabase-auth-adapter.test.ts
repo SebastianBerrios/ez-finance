@@ -6,11 +6,12 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 // vi.hoisted ensures these are available when vi.mock factory runs (hoisted).
 // ---------------------------------------------------------------------------
-const { mockSignInWithOAuth, mockExchangeCodeForSession, mockGetUser } =
+const { mockSignInWithOAuth, mockExchangeCodeForSession, mockGetUser, mockSignOut } =
   vi.hoisted(() => ({
     mockSignInWithOAuth: vi.fn(),
     mockExchangeCodeForSession: vi.fn(),
     mockGetUser: vi.fn(),
+    mockSignOut: vi.fn(),
   }));
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ vi.mock("@/shared/infrastructure/supabase/server", () => ({
       signInWithOAuth: mockSignInWithOAuth,
       exchangeCodeForSession: mockExchangeCodeForSession,
       getUser: mockGetUser,
+      signOut: mockSignOut,
     },
   }),
 }));
@@ -150,6 +152,42 @@ describe("SupabaseAuthAdapter.initiateGoogleLogin", () => {
       expect(serialized).not.toContain("provider_disabled");
       expect(serialized).not.toContain("Google provider not enabled");
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// logout — the scope is the whole point. mvp-lab shares auth.users across the
+// fleet, so supabase-js's default "global" scope would revoke fast_route's and
+// oasis's refresh tokens as a side effect of signing out of ez finance.
+// ---------------------------------------------------------------------------
+describe("SupabaseAuthAdapter.logout", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSignOut.mockResolvedValue({ error: null });
+  });
+
+  it("forwards the requested scope to signOut", async () => {
+    await makeAdapter().logout("local");
+
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("never calls signOut without an explicit scope", async () => {
+    await makeAdapter().logout("others");
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    const [options] = mockSignOut.mock.calls[0] as [unknown];
+    expect(options).toEqual({ scope: "others" });
+  });
+
+  it("maps a signOut failure to a domain error", async () => {
+    mockSignOut.mockResolvedValueOnce({
+      error: { code: "unknown_error", message: "boom" },
+    });
+
+    const result = await makeAdapter().logout("local");
+
+    expect(result.ok).toBe(false);
   });
 });
 

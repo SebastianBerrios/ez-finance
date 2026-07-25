@@ -52,7 +52,18 @@ export async function requestAccountDeletionAction(
     return { error: GENERIC_ERROR };
   }
 
-  // The use case closes every session, so there is nothing left to render
-  // inside the app. redirect() throws NEXT_REDIRECT — keep it out of try/catch.
+  if (!result.value.signedOut) {
+    // The window IS open, but the session survived. Redirecting to /login now
+    // would be worse than useless: the middleware bounces an authenticated user
+    // off the auth pages back to /app and the notice never renders. Say what
+    // happened instead and let the user close the session themselves.
+    return {
+      error:
+        "Programamos la eliminación de tu cuenta, pero no pudimos cerrar tu sesión. Cerrala manualmente desde “Cerrar sesión”.",
+    };
+  }
+
+  // The session is closed, so there is nothing left to render inside the app.
+  // redirect() throws NEXT_REDIRECT — keep it out of try/catch.
   redirect("/login?deletion=requested");
 }

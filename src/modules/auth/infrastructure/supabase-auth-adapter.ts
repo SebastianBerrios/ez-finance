@@ -2,7 +2,12 @@
 // ONLY file in the auth module that imports @supabase/* for auth operations.
 // All errors are mapped through mapSupabaseError(); no Supabase error code
 // leaks past this file.
-import { type AuthPort, type AuthUserRef, type SessionRef } from "@/modules/auth/application/ports/auth-port";
+import {
+  type AuthPort,
+  type AuthUserRef,
+  type LogoutScope,
+  type SessionRef,
+} from "@/modules/auth/application/ports/auth-port";
 import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { type Email } from "@/modules/auth/domain/email";
 import { type Password } from "@/modules/auth/domain/password";
@@ -74,12 +79,16 @@ export class SupabaseAuthAdapter implements AuthPort {
   }
 
   // ---------------------------------------------------------------------------
-  // logout
+  // logout — the scope is always passed explicitly.
+  // supabase-js defaults signOut() to scope "global", which revokes every
+  // refresh token on the auth.users row. In mvp-lab that row is SHARED with
+  // fast_route and oasis, so the default would sign the person out of apps
+  // this one has no business touching. Never call signOut() bare here.
   // ---------------------------------------------------------------------------
-  async logout(): Promise<Result<void, AuthError>> {
+  async logout(scope: LogoutScope): Promise<Result<void, AuthError>> {
     try {
       const supabase = await createServerClient();
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope });
       if (error) return err(mapSupabaseError(error));
       return ok(undefined);
     } catch (e) {

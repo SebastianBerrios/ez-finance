@@ -13,7 +13,7 @@ interface LoginPageProps {
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
-  // Set after a deletion request closes every session: without this note the
+  // Set after a deletion request signs this browser out: without this note the
   // user lands on a bare login screen right after a destructive action.
   const { deletion } = await searchParams;
 
@@ -29,9 +29,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           aria-live="polite"
           className="bg-muted mb-4 rounded-lg px-4 py-3 text-sm"
         >
-          Programamos la eliminación de tu cuenta y cerramos tus sesiones.
-          Tenés 30 días para volver a ingresar y cancelarla desde Configuración
-          → Datos y cuenta.
+          Programamos la eliminación de tu cuenta y cerramos la sesión en este
+          dispositivo. Tenés 30 días para volver a ingresar y cancelarla desde
+          Configuración → Datos y cuenta.
         </div>
       )}
 

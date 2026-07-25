@@ -34,13 +34,44 @@ function makeFakeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPo
 }
 
 describe("requestAccountDeletion use case", () => {
-  it("returns ok(GracePeriod) when deletion request succeeds", async () => {
+  it("returns ok with the grace window when the deletion request succeeds", async () => {
     const deletion = makeFakeDeletionPort();
     const auth = makeFakeAuthPort();
     const result = await requestAccountDeletion({ userId: "u1" }, { deletion, auth });
     expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.grace).toBe(fakeGracePeriod);
+      expect(result.value.signedOut).toBe(true);
+    }
     expect(deletion.request).toHaveBeenCalledWith("u1");
     expect(auth.logout).toHaveBeenCalledOnce();
+  });
+
+  it("closes only this browser's session, not the whole fleet", async () => {
+    // The auth.users row is shared with fast_route and oasis in mvp-lab, so a
+    // "global" sign-out here would be cross-app damage.
+    const deletion = makeFakeDeletionPort();
+    const auth = makeFakeAuthPort();
+    await requestAccountDeletion({ userId: "u1" }, { deletion, auth });
+    expect(auth.logout).toHaveBeenCalledWith("local");
+  });
+
+  it("reports signedOut: false when the sign-out fails, keeping the request", async () => {
+    // The grace window is already open in the database — a failed sign-out must
+    // not look like a failed request. The caller needs to know it cannot
+    // redirect to an auth page (the middleware would bounce it back).
+    const deletion = makeFakeDeletionPort();
+    const auth = makeFakeAuthPort({
+      logout: vi.fn().mockResolvedValue(err({ kind: "Unavailable" })),
+    });
+
+    const result = await requestAccountDeletion({ userId: "u1" }, { deletion, auth });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.signedOut).toBe(false);
+      expect(result.value.grace).toBe(fakeGracePeriod);
+    }
   });
 
   it("propagates a generic block from the deletion port without acting further", async () => {
