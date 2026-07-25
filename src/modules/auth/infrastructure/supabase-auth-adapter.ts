@@ -132,7 +132,22 @@ export class SupabaseAuthAdapter implements AuthPort {
   }
 
   // ---------------------------------------------------------------------------
-  // changePassword — revokes other sessions on success
+  // changePassword — revokes every OTHER session on success.
+  //
+  // THIS ONE IS DELIBERATELY FLEET-WIDE, and it is the only place that is.
+  // Everywhere else (logout, the deletion flow) the scope is "local", because
+  // mvp-lab shares one auth.users row with fast_route and oasis and signing out
+  // of ez finance has no business touching them.
+  //
+  // A password is different: it protects the SHARED identity itself, not this
+  // app's data. A password change is usually made BECAUSE the old one may be
+  // compromised, so leaving the other apps' refresh tokens alive would keep the
+  // attacker in — and there is no way to revoke "only ez finance's" sessions in
+  // a shared project. Revoking all of them is the honest behaviour.
+  //
+  // It goes through the port with an explicit scope rather than calling
+  // signOut() directly: the scope is a decision, and the decision lives in one
+  // place. "others", never "global" — the browser doing the change stays in.
   // ---------------------------------------------------------------------------
   async changePassword(
     _current: Password | null,
@@ -146,8 +161,18 @@ export class SupabaseAuthAdapter implements AuthPort {
 
       if (error) return err(mapSupabaseError(error));
 
-      // Revoke all OTHER sessions so password change takes immediate effect
-      await supabase.auth.signOut({ scope: "others" });
+      const revoked = await this.logout("others");
+
+      if (!revoked.ok) {
+        // The password IS changed, so failing here would tell the user to retry
+        // with a password that already works. But a silent failure leaves
+        // possibly stolen sessions alive on a credential the user believes was
+        // rotated — that has to be visible somewhere.
+        console.error(
+          "[auth/changePassword] revoking the other sessions failed:",
+          revoked.error,
+        );
+      }
 
       return ok(undefined);
     } catch (e) {

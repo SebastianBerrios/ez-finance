@@ -6,13 +6,19 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 // ---------------------------------------------------------------------------
 // vi.hoisted ensures these are available when vi.mock factory runs (hoisted).
 // ---------------------------------------------------------------------------
-const { mockSignInWithOAuth, mockExchangeCodeForSession, mockGetUser, mockSignOut } =
-  vi.hoisted(() => ({
-    mockSignInWithOAuth: vi.fn(),
-    mockExchangeCodeForSession: vi.fn(),
-    mockGetUser: vi.fn(),
-    mockSignOut: vi.fn(),
-  }));
+const {
+  mockSignInWithOAuth,
+  mockExchangeCodeForSession,
+  mockGetUser,
+  mockSignOut,
+  mockUpdateUser,
+} = vi.hoisted(() => ({
+  mockSignInWithOAuth: vi.fn(),
+  mockExchangeCodeForSession: vi.fn(),
+  mockGetUser: vi.fn(),
+  mockSignOut: vi.fn(),
+  mockUpdateUser: vi.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Mock @/shared/infrastructure/supabase/server so tests run in node env
@@ -25,9 +31,12 @@ vi.mock("@/shared/infrastructure/supabase/server", () => ({
       exchangeCodeForSession: mockExchangeCodeForSession,
       getUser: mockGetUser,
       signOut: mockSignOut,
+      updateUser: mockUpdateUser,
     },
   }),
 }));
+
+import { makePassword } from "@/modules/auth/domain/password";
 
 import { SupabaseAuthAdapter } from "./supabase-auth-adapter";
 
@@ -188,6 +197,71 @@ describe("SupabaseAuthAdapter.logout", () => {
     const result = await makeAdapter().logout("local");
 
     expect(result.ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// changePassword — the ONE place where a fleet-wide revocation is intentional.
+// Everywhere else sign-out is "local", because mvp-lab shares auth.users. A
+// password protects that SHARED identity, so leaving the other sessions alive
+// after a change (often made because the old one was compromised) would defeat
+// the point. It must still go through the port: the scope is a decision, not
+// something a raw signOut() call gets to make on its own.
+// ---------------------------------------------------------------------------
+describe("SupabaseAuthAdapter.changePassword", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUpdateUser.mockResolvedValue({ error: null });
+    mockSignOut.mockResolvedValue({ error: null });
+  });
+
+  it("revokes the other sessions through the port with an explicit scope", async () => {
+    const adapter = makeAdapter();
+    const logoutSpy = vi.spyOn(adapter, "logout");
+
+    const result = await adapter.changePassword(null, makePassword("N3wPassw0rd!"));
+
+    expect(result.ok).toBe(true);
+    expect(logoutSpy).toHaveBeenCalledWith("others");
+  });
+
+  it("keeps THIS session alive", async () => {
+    // "others", never "global": the person changing their password must not be
+    // signed out of the browser they are doing it in.
+    await makeAdapter().changePassword(null, makePassword("N3wPassw0rd!"));
+
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: "others" });
+  });
+
+  it("does not revoke anything when the password change itself failed", async () => {
+    mockUpdateUser.mockResolvedValue({
+      error: { code: "weak_password", message: "too weak" },
+    });
+
+    const result = await makeAdapter().changePassword(
+      null,
+      makePassword("short"),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it("reports success but logs when the revocation fails", async () => {
+    // The password IS changed. Failing the whole operation would tell the user
+    // to try again with a password that already works. But a silent failure
+    // leaves stolen sessions alive on a credential the user believes rotated.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockSignOut.mockResolvedValue({ error: { message: "boom" } });
+
+    const result = await makeAdapter().changePassword(
+      null,
+      makePassword("N3wPassw0rd!"),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(console.error).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });
 
