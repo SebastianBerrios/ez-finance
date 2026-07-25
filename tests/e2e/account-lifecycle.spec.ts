@@ -82,7 +82,9 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
       expect.objectContaining({ type: "personal" }),
     );
 
-    // --- requesting deletion closes every session ---------------------------
+    // --- requesting deletion signs THIS browser out -------------------------
+    // Scope is "local", not "global": mvp-lab shares auth.users with the other
+    // fleet apps, so a global sign-out would be cross-app damage.
     await page.getByLabel(/escribí/i).fill("ELIMINAR");
     await page.getByRole("button", { name: /eliminar mi cuenta/i }).click();
     await page.waitForURL(/\/login\?deletion=requested/);
