@@ -77,14 +77,22 @@ describe("GET /api/cron/process-deletions", () => {
     expect(await response.json()).toMatchObject({ finalized: 3, skipped: 0 });
   });
 
-  it("asks for an explicit batch size instead of inheriting the default 100", async () => {
-    // The default caps the pipeline at 100 erasures per day. Users who deleted
-    // their account by definition never come back to trigger their own sweep,
-    // so a backlog above that grows monotonically and never drains.
+  it("asks for an explicit batch size instead of inheriting the database default", async () => {
     await GET(request(`Bearer ${SECRET}`));
 
     const [, args] = mockRpc.mock.calls[0] as [string, { p_limit?: number }];
-    expect(args?.p_limit).toBeGreaterThan(100);
+    expect(args?.p_limit).toBeGreaterThan(0);
+  });
+
+  it("keeps the slice small so one timeout cannot discard a huge batch", async () => {
+    // process_due_deletions() runs its whole loop in ONE transaction and now
+    // re-raises statement timeouts instead of swallowing them, so everything
+    // finalized in that call rolls back. A 1000-row slice turns a slow night
+    // into permanent zero progress; the drain loop is what handles volume.
+    await GET(request(`Bearer ${SECRET}`));
+
+    const [, args] = mockRpc.mock.calls[0] as [string, { p_limit?: number }];
+    expect(args?.p_limit).toBeLessThanOrEqual(200);
   });
 
   it("keeps running batches until one finalizes nothing", async () => {
@@ -127,7 +135,44 @@ describe("GET /api/cron/process-deletions", () => {
     );
   });
 
-  it("stops looping when a batch skipped rows instead of spinning on them", async () => {
+  it("does NOT report the queue drained when every candidate was contended", async () => {
+    // {finalized: 0, skipped: 0, contended: N} means somebody else holds those
+    // users' advisory locks — the work is pending, not done. Reporting
+    // "drained" here is the same silent-success bug one level up from the SQL.
+    batches(batch(0, 0, 5));
+
+    const response = await GET(request(`Bearer ${SECRET}`));
+
+    expect(await response.json()).toMatchObject({ drained: false, contended: 5 });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("contended 5"),
+    );
+  });
+
+  it("keeps draining past a poison row instead of throttling to one batch", async () => {
+    // A skipped row is isolated in its own subtransaction, so the REST of that
+    // batch still committed and the next pass still erases healthy rows.
+    // Breaking out capped the whole pipeline at one batch per run because of
+    // one bad row.
+    batches(batch(10, 1), batch(7, 1), batch(0, 1));
+
+    const response = await GET(request(`Bearer ${SECRET}`));
+
+    expect(mockRpc).toHaveBeenCalledTimes(3);
+    expect(await response.json()).toMatchObject({ finalized: 17 });
+  });
+
+  it("reports the stuck counts of the final batch, not the sum over retries", async () => {
+    // The same poison row is re-selected by every batch. Summing would report
+    // "skipped 3" for ONE stuck user drained over three passes.
+    batches(batch(10, 1), batch(5, 1), batch(0, 1));
+
+    const response = await GET(request(`Bearer ${SECRET}`));
+
+    expect(await response.json()).toMatchObject({ finalized: 15, skipped: 1 });
+  });
+
+  it("stops looping once a batch finalizes nothing", async () => {
     batches(batch(0, 4));
 
     await GET(request(`Bearer ${SECRET}`));

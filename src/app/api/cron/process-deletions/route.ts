@@ -36,8 +36,16 @@ export const dynamic = "force-dynamic";
 // finishes and gets logged instead of being cut off mid-erasure.
 export const maxDuration = 60;
 
-/** The database clamps p_limit to this, and silently defaults to 100 without it. */
-const BATCH_LIMIT = 1000;
+/**
+ * Deliberately small. process_due_deletions() runs its whole loop inside ONE
+ * transaction and re-raises infrastructure errors (statement timeout, admin
+ * shutdown, serialization, deadlock) instead of swallowing them, so whatever a
+ * call finalized before such an error ROLLS BACK. A large slice therefore turns
+ * one slow night into permanent zero progress: the next run re-selects the same
+ * oldest rows and dies the same way. Volume is the drain loop's job, not the
+ * slice's.
+ */
+const BATCH_LIMIT = 100;
 
 /** Leaves ~10s of the maxDuration for the batch already in flight. */
 const TIME_BUDGET_MS = 50_000;
@@ -106,10 +114,15 @@ export async function GET(request: Request) {
 
   const startedAt = Date.now();
   let finalized = 0;
-  let skipped = 0;
-  let contended = 0;
   let runs = 0;
   let drained = false;
+
+  // Counts from the batch that STOPPED the drain, not sums. Every pass
+  // re-selects the same stuck rows, so a cumulative total would report
+  // "contended 4" for ONE stuck user drained over four passes — inflating the
+  // single number an operator uses to decide whether something is wedged.
+  let skipped = 0;
+  let contended = 0;
 
   try {
     const supabase = createServiceClient();
@@ -139,15 +152,19 @@ export async function GET(request: Request) {
 
       runs += 1;
       finalized += counts.finalized;
-      skipped += counts.skipped;
-      contended += counts.contended;
+      skipped = counts.skipped;
+      contended = counts.contended;
 
-      // A skipped row means a finalization threw. It will throw again next
-      // iteration and it sorts first, so looping only burns the budget.
-      if (counts.skipped > 0) break;
-
+      // Only a batch that erased NOTHING ends the drain.
+      //
+      // A poison row must not end it: the SQL loop isolates each finalization
+      // in its own subtransaction, so the rest of that batch still committed
+      // and the next pass still erases healthy rows. Breaking out on skipped
+      // capped the entire pipeline at one batch per run because of one bad row.
       if (counts.finalized === 0) {
-        drained = true;
+        // Skipped and contended rows are pending work, not finished work, so
+        // "drained" is only honest when the last batch found neither.
+        drained = counts.skipped === 0 && counts.contended === 0;
         break;
       }
     }
@@ -157,9 +174,9 @@ export async function GET(request: Request) {
   }
 
   const summary =
-    `[cron/process-deletions] finalized ${finalized}, skipped ${skipped}, ` +
-    `contended ${contended} over ${runs} batch(es)` +
-    (drained ? "" : " — TIME BUDGET EXHAUSTED, a backlog remains");
+    `[cron/process-deletions] finalized ${finalized} over ${runs} batch(es); ` +
+    `last batch skipped ${skipped}, contended ${contended}` +
+    (drained ? "" : " — WORK REMAINS");
 
   if (skipped > 0) {
     // The failure mode that matters. HTTP 200 with "finalized 0" is exactly
@@ -170,6 +187,14 @@ export async function GET(request: Request) {
       { finalized, skipped, contended, runs, drained },
       { status: 500 },
     );
+  }
+
+  if (contended > 0) {
+    // Usually transient — a returning user's own sweep holds their advisory
+    // lock. But a user contended on EVERY run is never finalized, and at 200
+    // with an info-level log nothing would ever surface that.
+    console.error(summary);
+    return NextResponse.json({ finalized, skipped, contended, runs, drained });
   }
 
   // The only audit trail this job has.
