@@ -1,23 +1,19 @@
 import Link from "next/link";
 
 import { logoutAction } from "@/app/(app)/actions/logout.action";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { SupabaseProfileAdapter } from "@/modules/auth/infrastructure/supabase-profile-adapter";
 import { LogoutButton } from "@/modules/auth/ui/components/logout-button";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
 
-// Protected landing page — middleware guarantees user is authenticated.
-// Bootstraps workspace idempotently, then shows a minimal authenticated view.
+// Protected landing page — middleware guarantees user is authenticated and the
+// (app) layout has already bootstrapped the workspace.
 // Full dashboard is a later phase.
 export default async function AppPage() {
   const supabase = await createServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  // bootstrapUserWorkspace is idempotent — safe to call on every load.
-  await bootstrapUserWorkspace();
 
   const profileAdapter = new SupabaseProfileAdapter();
   const profileResult = user ? await profileAdapter.getProfile(user.id) : null;
