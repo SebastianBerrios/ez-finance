@@ -1,11 +1,17 @@
 // Account lifecycle end-to-end (Fase 2c tramo B).
 //
-// GATED: needs a running Supabase stack, so it is skipped unless
-// SUPABASE_TEST_URL is set — same convention as the integration tests.
+// GATED: needs a running LOCAL Supabase stack. There is nothing to set by hand
+// — playwright.config.ts asks the CLI where the local stack is, pins the app
+// under test to it, and this spec skips itself when there is no such stack.
 //
 //   pnpm exec supabase start && pnpm exec supabase db reset
-//   pnpm dev                       # or the Playwright webServer
-//   SUPABASE_TEST_URL=http://127.0.0.1:54331 pnpm test:e2e
+//   pnpm test:e2e
+//
+// DO NOT run it against a server you started yourself. `pnpm dev` / `pnpm start`
+// read .env.local, which points at the SHARED hosted mvp-lab project, and this
+// spec registers users, erases them and writes deletion-request rows.
+// playwright.config.ts sets reuseExistingServer:false precisely so it can vouch
+// for the credentials the browser is driving.
 //
 // This is the only test that exercises the adapter <-> real RPC seam: the unit
 // tests mock the Supabase client, so a wrong RPC name, a renamed jsonb key or a
@@ -15,13 +21,14 @@ import { execFileSync } from "node:child_process";
 import { unzipSync, strFromU8 } from "fflate";
 import { expect, test } from "@playwright/test";
 
-// The guard demands a LOCAL stack on purpose. This test registers users, and
-// mvp-lab's auth.users pool is shared with the other apps in the fleet — test
-// signups must never land there. `pnpm start` (what the Playwright webServer
-// builds) reads .env.local, which points at the hosted project, so an
-// unqualified "is the env var set?" check would be enough to pollute it.
-const STACK_URL = process.env["SUPABASE_TEST_URL"] ?? "";
-const LIVE_LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(STACK_URL);
+// The URL the APP UNDER TEST is wired to — the one playwright.config.ts put in
+// the web server's environment — not some parallel variable the app never
+// reads. mvp-lab's auth.users pool is shared with the other apps in the fleet,
+// so a signup here must never be able to land there.
+const APP_SUPABASE_URL = process.env["E2E_SUPABASE_URL"] ?? "";
+const LIVE_LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(
+  APP_SUPABASE_URL,
+);
 
 const PASSWORD = "Sup3rSecret!2026";
 
@@ -52,6 +59,37 @@ function sql(statement: string): string {
   ).trim();
 }
 
+/**
+ * Every account this file registers, so afterAll can erase it.
+ *
+ * Both tests used to leave an auth.users row, a personal workspace and a
+ * deletion-request ledger entry behind on every run.
+ */
+const registered: string[] = [];
+
+function registerEmail(prefix: string): string {
+  const email = `${prefix}.${Date.now()}@test.local`;
+  registered.push(email);
+  return email;
+}
+
+/**
+ * Proof — not assumption — that the browser is driving the LOCAL stack.
+ *
+ * Runs immediately after the first registration and before anything else is
+ * created. If the app were wired anywhere else the row would be missing and
+ * the run stops here instead of building a whole account somewhere it must not.
+ */
+function assertRegisteredLocally(email: string): void {
+  const found = sql(
+    `select count(*) from auth.users where email = '${email}'`,
+  );
+  expect(
+    Number(found),
+    `"${email}" is not in the local container: the app under test is NOT wired to ${APP_SUPABASE_URL}`,
+  ).toBe(1);
+}
+
 /** Make the pending deletion request of `email` due right now. */
 function expireGraceWindow(email: string): void {
   sql(
@@ -68,7 +106,35 @@ function expireGraceWindow(email: string): void {
  * then only ever return false.
  */
 function runScheduledWorker(): number {
-  return Number(sql("select ez_finance.process_due_deletions()"));
+  return Number(
+    sql("select ez_finance.process_due_deletions() ->> 'finalized'"),
+  );
+}
+
+/**
+ * Erase everything this file created.
+ *
+ * auth.users cascades to profiles and nulls out workspace_members.user_id, so
+ * the personal workspaces have to go first or they survive as orphans — the
+ * exact litter the deletion feature exists to avoid.
+ */
+function deleteFixtureAccounts(emails: string[]): void {
+  if (emails.length === 0) return;
+
+  const list = emails.map((email) => `'${email}'`).join(", ");
+  const ids = `select id from auth.users where email in (${list})`;
+
+  sql(
+    `delete from ez_finance.workspaces w
+     where exists (
+       select 1 from ez_finance.workspace_members m
+       where  m.workspace_id = w.id
+       and    m.user_id in (${ids})
+     );
+     delete from ez_finance_private.deletion_requests where user_id in (${ids});
+     delete from ez_finance.profiles where id in (${ids});
+     delete from auth.users where email in (${list});`,
+  );
 }
 
 function profileCount(email: string): number {
@@ -83,14 +149,20 @@ function profileCount(email: string): number {
 test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
   test.skip(
     !LIVE_LOCAL_STACK,
-    "set SUPABASE_TEST_URL to a local stack (http://127.0.0.1:54331) to run",
+    `the app under test is wired to "${APP_SUPABASE_URL}", which is not a local stack — run \`pnpm exec supabase start\``,
   );
   test.describe.configure({ mode: "serial" });
+
+  test.afterAll(() => {
+    // Leaving these behind pollutes every later run of the psql suites, which
+    // assert on counts in the same container.
+    deleteFixtureAccounts(registered.splice(0));
+  });
 
   test("export, request deletion, log back in, cancel", async ({ page }) => {
     test.setTimeout(120_000);
 
-    const email = `lifecycle.${Date.now()}@test.local`;
+    const email = registerEmail("lifecycle");
 
     // --- register ----------------------------------------------------------
     await page.goto("/register");
@@ -101,6 +173,9 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     await page.getByRole("button", { name: /crear cuenta/i }).click();
     // The app routes to /check-email by design; the session already exists.
     await page.waitForURL(/\/app|\/check-email/);
+
+    // The signup landed in the LOCAL container, so everything below is safe.
+    assertRegisteredLocally(email);
 
     // --- deep link straight into settings, never having visited /app --------
     // The (app) layout must bootstrap the profile here, otherwise every read on
@@ -187,7 +262,7 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
   }) => {
     test.setTimeout(120_000);
 
-    const email = `terminal.${Date.now()}@test.local`;
+    const email = registerEmail("terminal");
 
     // --- register + bootstrap ----------------------------------------------
     await page.goto("/register");
@@ -197,6 +272,8 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     if (await confirmField.count()) await confirmField.first().fill(PASSWORD);
     await page.getByRole("button", { name: /crear cuenta/i }).click();
     await page.waitForURL(/\/app|\/check-email/);
+
+    assertRegisteredLocally(email);
 
     await page.goto("/app/settings/account");
     await expect(
@@ -224,10 +301,32 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
     await page.getByRole("button", { name: /^ingresar/i }).click();
 
+    await page.waitForURL(/\/auth\/deleted/);
+    await expect(
+      page.getByText(/Eliminamos tus datos de ez finance/i),
+    ).toBeVisible();
+
+    // The account was NOT silently rebuilt on the way through.
+    expect(profileCount(email)).toBe(0);
+
+    // MERELY LOADING THE PAGE CHANGES NOTHING. The notice used to be a GET
+    // route handler that acknowledged the erasure and signed the caller out, so
+    // any cross-site <img src> consumed it without ever showing it. Reloading
+    // must still find the terminal state.
+    await page.reload();
+    await expect(page).toHaveURL(/\/auth\/deleted/);
+    await expect(
+      page.getByText(/Eliminamos tus datos de ez finance/i),
+    ).toBeVisible();
+
+    // --- only a DELIBERATE confirmation closes the session ------------------
+    await page
+      .getByRole("button", { name: /entendido, cerrar sesión/i })
+      .click();
+
     await page.waitForURL(/\/login\?deletion=completed/);
     await expect(page.getByRole("status")).toContainText(/eliminamos tus datos/i);
 
-    // The account was NOT silently rebuilt on the way through.
     expect(profileCount(email)).toBe(0);
 
     // The session is really closed: /app bounces back to login.
