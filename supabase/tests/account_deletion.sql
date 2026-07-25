@@ -295,5 +295,23 @@ exception
 end;
 $$;
 
+-- ===========================================================================
+-- 14. anon cannot reach the deletion RPCs at all (grant-level, not just the
+--     in-function session guard). See 20260725130000.
+-- ===========================================================================
 select pg_temp.as_postgres();
+
+select pg_temp.check(
+  not has_function_privilege('anon', 'ez_finance.request_account_deletion()', 'execute')
+  and not has_function_privilege('anon', 'ez_finance.cancel_account_deletion()', 'execute')
+  and not has_function_privilege('anon', 'ez_finance.process_deletion_if_due()', 'execute')
+  and not has_function_privilege('anon', 'ez_finance.deletion_state()', 'execute'),
+  'anon has no EXECUTE on any deletion RPC'
+);
+
+select pg_temp.check(
+  has_function_privilege('authenticated', 'ez_finance.request_account_deletion()', 'execute'),
+  'authenticated keeps EXECUTE on the deletion RPCs'
+);
+
 \echo 'ALL CHECKS PASSED'
