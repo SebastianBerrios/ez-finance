@@ -1,36 +1,106 @@
-// supabase-deletion-adapter.ts — implements DeletionPort
+// supabase-deletion-adapter.ts — implements DeletionPort over the ez_finance
+// deletion RPCs (migration 20260725120000_ez_finance_account_deletion.sql).
 //
-// SCHEMA MISMATCH NOTICE (slice 2a-ii):
-// The ez_finance_private.deletion_requests table has NOT been migrated yet.
-// This adapter depends on:
-//   - ez_finance_private.deletion_requests (table — Fase 2c)
-//   - SECURITY DEFINER RPCs for deletion state reads/writes (Fase 2c)
-// All three DeletionPort methods return a not-yet-implemented Result until
-// those objects are provisioned (Fase 2c migration).
-// DO NOT pass this adapter to requestAccountDeletion use-case in production
-// until the migration is applied.
-import { type DeletionPort } from "@/modules/auth/application/ports/deletion-port";
+// SCOPED DELETION: none of these RPCs touch auth.users. mvp-lab is a shared
+// project, so "deleting the account" erases ez_finance data only; the shared
+// identity row survives for the other apps. See the migration header.
+//
+// The RPCs derive the user from auth.uid(), so the `userId` argument is only
+// the caller's assertion of who is logged in — it is never sent. The session
+// cookie is the authority, which is what keeps the port honest against a
+// forged id.
+import {
+  type DeletionPort,
+  type DeletionStatus,
+} from "@/modules/auth/application/ports/deletion-port";
 import { type AuthError } from "@/modules/auth/domain/auth-error";
-import { type DeletionState } from "@/modules/auth/domain/deletion-state";
-import { type GracePeriod } from "@/modules/auth/domain/grace-period";
-import { type Result, err } from "@/shared/domain/result";
+import { GracePeriod } from "@/modules/auth/domain/grace-period";
+import { type Result, err, ok } from "@/shared/domain/result";
+import { createServerClient } from "@/shared/infrastructure/supabase/server";
+
+import { mapSupabaseError } from "./error-map";
+
+// jsonb payloads returned by the RPCs.
+interface DeletionStatePayload {
+  state?: unknown;
+  requested_at?: unknown;
+  ends_at?: unknown;
+}
+
+/** Parse a timestamptz string; null when absent or not a real date. */
+function parseTimestamp(value: unknown): Date | null {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * Build a GracePeriod from a persisted window. Returns null when either
+ * boundary is missing or unparseable — the caller maps that to Unavailable
+ * rather than inventing a deadline.
+ */
+function parseWindow(payload: DeletionStatePayload): GracePeriod | null {
+  const requestedAt = parseTimestamp(payload.requested_at);
+  const endsAt = parseTimestamp(payload.ends_at);
+  if (requestedAt === null || endsAt === null) return null;
+  return GracePeriod.between(requestedAt, endsAt);
+}
 
 export class SupabaseDeletionAdapter implements DeletionPort {
-  // getState: reads deletion_requests row — NOT YET AVAILABLE (Fase 2c)
-  async getState(_userId: string): Promise<Result<DeletionState, AuthError>> {
-    // deletion_requests table ships in Fase 2c migration.
-    // Returning ACTIVE (no pending request) would be wrong; return Unavailable
-    // so callers know this is not yet wired.
-    return err({ kind: "Unavailable" });
+  async getState(_userId: string): Promise<Result<DeletionStatus, AuthError>> {
+    try {
+      const supabase = await createServerClient();
+      const { data, error } = await supabase.rpc("deletion_state");
+
+      if (error) return err(mapSupabaseError(error));
+      if (!data) return err({ kind: "Unavailable" });
+
+      const payload = data as DeletionStatePayload;
+
+      if (payload.state === "ACTIVE") {
+        return ok({ state: "ACTIVE" });
+      }
+
+      if (payload.state === "GRACE_PERIOD") {
+        const grace = parseWindow(payload);
+        if (grace === null) return err({ kind: "Unavailable" });
+        return ok({ state: "GRACE_PERIOD", grace });
+      }
+
+      // Unknown state value: fail closed rather than guessing ACTIVE, which
+      // would hide a pending deletion from the user.
+      return err({ kind: "Unavailable" });
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
   }
 
-  // request: inserts deletion_requests + closes sessions — NOT YET AVAILABLE (Fase 2c)
   async request(_userId: string): Promise<Result<GracePeriod, AuthError>> {
-    return err({ kind: "Unavailable" });
+    try {
+      const supabase = await createServerClient();
+      const { data, error } = await supabase.rpc("request_account_deletion");
+
+      if (error) return err(mapSupabaseError(error));
+      if (!data) return err({ kind: "Unavailable" });
+
+      const grace = parseWindow(data as DeletionStatePayload);
+      if (grace === null) return err({ kind: "Unavailable" });
+
+      return ok(grace);
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
   }
 
-  // cancel: updates deletion_requests.cancelled_at — NOT YET AVAILABLE (Fase 2c)
   async cancel(_userId: string): Promise<Result<void, AuthError>> {
-    return err({ kind: "Unavailable" });
+    try {
+      const supabase = await createServerClient();
+      const { error } = await supabase.rpc("cancel_account_deletion");
+
+      if (error) return err(mapSupabaseError(error));
+      return ok(undefined);
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
   }
 }

@@ -11,8 +11,22 @@ export interface GracePeriod {
 }
 
 export function makeGracePeriod(requestedAt: Date): GracePeriod {
-  const endsAt = new Date(requestedAt.getTime() + GRACE_DAYS * MS_PER_DAY);
+  return makeGracePeriodBetween(
+    requestedAt,
+    new Date(requestedAt.getTime() + GRACE_DAYS * MS_PER_DAY),
+  );
+}
 
+/**
+ * Rebuild a grace period from a PERSISTED window. The stored endsAt wins: the
+ * database computes the deadline when the request is created, so a stored
+ * window must never be recomputed from GRACE_DAYS (that would silently move a
+ * user's deadline if the constant ever changes).
+ */
+export function makeGracePeriodBetween(
+  requestedAt: Date,
+  endsAt: Date,
+): GracePeriod {
   return {
     requestedAt,
     endsAt,
@@ -26,4 +40,7 @@ export function makeGracePeriod(requestedAt: Date): GracePeriod {
 }
 
 // Namespace-style access for ergonomics: GracePeriod.from(requestedAt)
-export const GracePeriod = { from: makeGracePeriod } as const;
+export const GracePeriod = {
+  from: makeGracePeriod,
+  between: makeGracePeriodBetween,
+} as const;

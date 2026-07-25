@@ -53,4 +53,33 @@ describe("GracePeriod value object", () => {
     const gp = GracePeriod.from(requestedAt);
     expect(gp.requestedAt.getTime()).toBe(requestedAt.getTime());
   });
+
+  // The persisted window is authoritative: a request stored with a different
+  // deadline (window changed, clock skew) must be reconstructed as stored,
+  // never recomputed from the local GRACE_DAYS constant.
+  describe("between()", () => {
+    it("keeps the given endsAt even when it differs from requestedAt + 30 days", () => {
+      const endsAt = new Date("2024-01-08T00:00:00.000Z"); // +7 days
+      const gp = GracePeriod.between(requestedAt, endsAt);
+
+      expect(gp.requestedAt.getTime()).toBe(requestedAt.getTime());
+      expect(gp.endsAt.getTime()).toBe(endsAt.getTime());
+    });
+
+    it("derives isExpired from the given endsAt", () => {
+      const endsAt = new Date("2024-01-08T00:00:00.000Z");
+      const gp = GracePeriod.between(requestedAt, endsAt);
+
+      expect(gp.isExpired(new Date("2024-01-07T23:59:59.000Z"))).toBe(false);
+      expect(gp.isExpired(endsAt)).toBe(true);
+    });
+
+    it("derives canReactivate from the given endsAt", () => {
+      const endsAt = new Date("2024-01-08T00:00:00.000Z");
+      const gp = GracePeriod.between(requestedAt, endsAt);
+
+      expect(gp.canReactivate(new Date("2024-01-07T23:59:59.000Z"))).toBe(true);
+      expect(gp.canReactivate(endsAt)).toBe(false);
+    });
+  });
 });
