@@ -126,4 +126,14 @@ describe("ChangePasswordForm — success and error display", () => {
       expect(screen.getByRole("status")).toBeInTheDocument();
     });
   });
+  it("warns that other devices will be signed out, BEFORE the submit", () => {
+    // Rotating the password is the one place in the app that revokes sessions
+    // beyond this browser, and mvp-lab shares auth.users with the rest of the
+    // fleet — so it reaches the other apps too.
+    render(<ChangePasswordForm action={vi.fn()} />);
+
+    expect(
+      screen.getByText(/cerrar tu sesión en los demás dispositivos/i),
+    ).toBeInTheDocument();
+  });
 });

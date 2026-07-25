@@ -12,17 +12,29 @@ interface LogoutButtonProps {
   action: () => Promise<LogoutButtonState>;
 }
 
+// Never quotes the underlying failure: a transport error string is noise to the
+// person reading it and can carry the project URL.
+const FAILED =
+  "No pudimos cerrar tu sesión. Intentá de nuevo en unos minutos y, si seguís con problemas, cerrá el navegador.";
+
 export function LogoutButton({ action }: LogoutButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>(undefined);
 
   function handleLogout() {
     startTransition(async () => {
-      // On success the action redirects and this resolves with nothing. On
-      // failure it resolves with a message — which must be SHOWN: a silent
-      // failed sign-out leaves the user believing a shared machine is safe.
-      const state = await action();
-      setError(state?.error);
+      // Two different failures, one message. The action RESOLVES with an error
+      // when the sign-out itself failed, and REJECTS when the request never
+      // completed (dropped connection, 500) — the likelier of the two. An
+      // unhandled rejection escapes to the nearest error boundary and replaces
+      // the page, so the person never learns their session is still open on a
+      // machine they believe they just left.
+      try {
+        const state = await action();
+        setError(state?.error);
+      } catch {
+        setError(FAILED);
+      }
     });
   }
 

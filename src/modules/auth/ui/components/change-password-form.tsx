@@ -101,6 +101,15 @@ export function ChangePasswordForm({ action }: ChangePasswordFormProps) {
         />
       </div>
 
+      {/* Said BEFORE the submit, not after: this is the one place in the app
+          that revokes sessions beyond this browser, and it reaches the other
+          apps that share the same login. */}
+      <p className="text-muted-foreground text-xs">
+        Al cambiar la contraseña vamos a cerrar tu sesión en los demás
+        dispositivos y aplicaciones que usen esta misma cuenta. Esta sesión
+        sigue abierta.
+      </p>
+
       <Button type="submit" disabled={isPending} className="w-full">
         {isPending ? "Actualizando…" : "Cambiar contraseña"}
       </Button>

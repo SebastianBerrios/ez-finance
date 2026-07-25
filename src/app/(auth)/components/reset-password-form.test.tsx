@@ -88,4 +88,13 @@ describe("ResetPasswordForm — error display", () => {
       expect(alert).toHaveAttribute("aria-live", "assertive");
     });
   });
+  it("warns that other devices will be signed out, BEFORE the submit", () => {
+    // The recovery path runs the same rotation as Configuración → Seguridad,
+    // and it is the common one.
+    render(<ResetPasswordForm action={vi.fn()} />);
+
+    expect(
+      screen.getByText(/cerrar tu sesión en los demás dispositivos/i),
+    ).toBeInTheDocument();
+  });
 });

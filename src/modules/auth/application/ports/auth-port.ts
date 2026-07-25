@@ -20,7 +20,14 @@ export interface AuthUserRef {
  * project, so the refresh tokens hanging off one auth.users row belong to
  * fast_route and oasis too. A global sign-out here silently logs the person
  * out of the other apps in the fleet. Sessions cannot be scoped per app in a
- * shared project, so "local" (this browser only) is the honest maximum.
+ * shared project, so "local" (this browser only) is the maximum for a SIGN-OUT.
+ *
+ * THE ONE EXCEPTION IS PASSWORD ROTATION. changePassword() deliberately uses
+ * "others": a password change exists to lock out whoever might be holding the
+ * old one, and leaving their sessions alive defeats the point. It is the same
+ * cross-app cost, paid on purpose — and it fires on the password-RECOVERY path
+ * too, which is the common one. Both forms say so before the person submits.
+ * Any OTHER use of "others" or "global" is a bug.
  */
 export type LogoutScope = "local" | "others" | "global";
 

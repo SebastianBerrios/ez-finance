@@ -87,6 +87,14 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
         />
       </div>
 
+      {/* The recovery path runs the SAME rotation as Configuración → Seguridad,
+          and it is the common one. Same warning, same wording. */}
+      <p className="text-muted-foreground text-xs">
+        Al establecer la contraseña vamos a cerrar tu sesión en los demás
+        dispositivos y aplicaciones que usen esta misma cuenta. Esta sesión
+        sigue abierta.
+      </p>
+
       <Button type="submit" disabled={isPending} className="w-full">
         {isPending ? "Actualizando…" : "Establecer contraseña"}
       </Button>
