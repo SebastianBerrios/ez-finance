@@ -6,17 +6,13 @@
 // accounts that have no session at all, which is exactly why the pull-based
 // sweep could never close the dominant path.
 //
-// `server-only` is not a dependency of this project, so the guard is explicit:
-// this module throws the moment it is evaluated in a browser. Any accidental
-// import from a Client Component fails loudly at load instead of shipping a
-// root credential to every visitor.
-import { createClient } from "@supabase/supabase-js";
+// `server-only` is the guard that matters: importing this module from a Client
+// Component FAILS THE BUILD. A `typeof window` check cannot — by the time it
+// throws, the bundle carrying SUPABASE_SERVICE_ROLE_KEY has already shipped to
+// the visitor whose browser is running the throw.
+import "server-only";
 
-if (typeof window !== "undefined") {
-  throw new Error(
-    "service-client.ts is server-only: it holds SUPABASE_SERVICE_ROLE_KEY and must never reach a browser bundle",
-  );
-}
+import { createClient } from "@supabase/supabase-js";
 
 /**
  * Build a service-role client scoped to the ez_finance schema.
