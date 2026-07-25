@@ -1,5 +1,9 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
+
+// Delivery-layer tests that must NOT run in jsdom: Server Actions and Route
+// Handlers are server-only code, and a DOM around them only hides mistakes.
+const SERVER_ONLY_APP_TESTS = ["**/*.action.test.ts", "**/*.route.test.ts"];
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
@@ -19,6 +23,8 @@ export default defineConfig({
             "src/**/application/**/*.test.ts",
             // Infrastructure unit tests (pure mapping logic, no live Supabase needed)
             "src/**/infrastructure/**/*.test.ts",
+            // Server Actions and Route Handlers under src/app — server-only
+            ...SERVER_ONLY_APP_TESTS.map((pattern) => `src/app/${pattern}`),
           ],
           // Exclude integration tests that require a live Supabase stack
           exclude: [
@@ -38,6 +44,8 @@ export default defineConfig({
             // Delivery-layer (app) component tests that need jsdom
             "src/app/**/*.test.{ts,tsx}",
           ],
+          // Without this the server-only tests would also run here, in jsdom.
+          exclude: [...configDefaults.exclude, ...SERVER_ONLY_APP_TESTS],
         },
       },
       {
