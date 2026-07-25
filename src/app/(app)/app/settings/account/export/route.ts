@@ -24,7 +24,10 @@ export async function GET(request: Request) {
   );
 
   if (!result.ok) {
-    // Back to the account page with a flag; no provider detail is leaked.
+    // Logged server-side: `?export=error` is all the user ever sees, so without
+    // this an export that fails for everyone is indistinguishable from one that
+    // fails for nobody. The redirect itself leaks no provider detail.
+    console.error("[app/export] building the archive failed:", result.error);
     return NextResponse.redirect(
       new URL("/app/settings/account?export=error", request.url),
     );

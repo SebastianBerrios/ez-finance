@@ -65,16 +65,25 @@ function wireTables(overrides: Record<string, TableResult> = {}) {
   });
 }
 
+let consoleError: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.useFakeTimers();
+  // ONLY Date is faked. The handler awaits fflate's async zip(), and a blanket
+  // vi.useFakeTimers() freezes setTimeout/setImmediate underneath it — this
+  // suite passed purely because fflate's Node path happens not to route
+  // completion through a faked timer. Pinning the export date needs Date, and
+  // nothing else.
+  vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-07-25T12:00:00.000Z"));
+  consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
   wireTables();
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  consoleError.mockRestore();
 });
 
 describe("GET /app/settings/account/export", () => {
@@ -116,6 +125,20 @@ describe("GET /app/settings/account/export", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
       "http://localhost:3000/app/settings/account?export=error",
+    );
+  });
+
+  it("logs why the export failed before redirecting", async () => {
+    // `?export=error` is all the user ever sees. Without a server-side log an
+    // export that fails for everyone looks exactly like one that fails for
+    // nobody.
+    wireTables({ profiles: { single: null } });
+
+    await GET(new Request(URL_UNDER_TEST));
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("export"),
+      expect.anything(),
     );
   });
 

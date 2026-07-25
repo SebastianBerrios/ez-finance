@@ -45,12 +45,18 @@ export function DeleteAccountForm({ action }: DeleteAccountFormProps) {
         </div>
       )}
 
+      {/* The consequences must be complete AT THE MOMENT OF CONFIRMATION.
+          Since migration 20260725152507 a shared space whose last live member
+          deletes their account is erased along with its history, so the old
+          "los espacios compartidos siguen existiendo" was no longer true. */}
       <p className="text-muted-foreground text-sm">
         Tu cuenta queda programada para eliminarse en{" "}
         <strong className="text-foreground">30 días</strong>. Durante ese plazo
         podés volver a ingresar y cancelar la eliminación. Al vencer, borramos
-        tu perfil y tus espacios personales; los espacios compartidos siguen
-        existiendo para el resto de sus miembros.
+        tu perfil y tus espacios personales. Los espacios compartidos siguen
+        existiendo mientras quede alguien más en ellos; si sos la{" "}
+        <strong className="text-foreground">última persona</strong> de un
+        espacio compartido, ese espacio y su historial también se borran.
       </p>
 
       <div className="flex flex-col gap-2">

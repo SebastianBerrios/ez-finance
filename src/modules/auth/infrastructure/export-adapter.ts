@@ -78,11 +78,16 @@ const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
 /** RFC 4180 quoting: only when needed, doubling embedded quotes. */
 function toCsvValue(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const raw = typeof value === "string" ? value : String(value);
+  // ONLY strings are neutralised. Stringifying first turned a numeric -1234
+  // into the text '-1234, which a spreadsheet then refuses to sum, sort or
+  // chart — every exported amount silently became text. The injection risk
+  // only exists for values a person can type; a number cannot carry a formula.
+  const isText = typeof value === "string";
+  const raw = isText ? value : String(value);
   // A leading apostrophe is the standard neutraliser: spreadsheets read the
   // cell as literal text and do not render the quote. The .json files keep the
   // untouched value, so nothing is lost from the export.
-  const text = CSV_FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
+  const text = isText && CSV_FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
   if (/[",\n\r]/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }

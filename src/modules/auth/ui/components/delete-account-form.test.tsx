@@ -54,6 +54,18 @@ describe("DeleteAccountForm", () => {
     expect(screen.getByText(/30 días/i)).toBeInTheDocument();
   });
 
+  it("warns that a shared space dies with its last live member", () => {
+    // Migration 20260725152507 changed the consequences: a shared workspace
+    // whose last live member deletes their account is erased too, tombstoned
+    // history included. The copy still promised those spaces would survive
+    // "para el resto de sus miembros" — the user has to be told the truth at
+    // the moment of confirmation, not discover it afterwards.
+    render(<DeleteAccountForm action={makeAction()} />);
+
+    expect(screen.getByText(/última persona/i)).toBeInTheDocument();
+    expect(screen.getByText(/historial/i)).toBeInTheDocument();
+  });
+
   it("submits the confirmation to the action", async () => {
     const user = userEvent.setup();
     const action = makeAction();

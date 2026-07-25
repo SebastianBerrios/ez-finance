@@ -217,7 +217,7 @@ describe("ExportAdapter.exportUserData", () => {
             member_id: "m-4",
             workspace_id: "ws-1",
             user_id: USER_ID,
-            display_name_snapshot: "-1234",
+            display_name_snapshot: "-1234 y algo",
             role: "member",
             joined_at: "2026-07-01T10:00:00+00:00",
           },
@@ -243,7 +243,7 @@ describe("ExportAdapter.exportUserData", () => {
     expect(csv).toContain(`'=HYPERLINK(""http://evil.test"",""click"")`);
     expect(csv).toContain("'@SUM(1+1)");
     expect(csv).toContain("'+49 351 0000");
-    expect(csv).toContain("'-1234");
+    expect(csv).toContain("'-1234 y algo");
     expect(csv).toContain("'\t=1+1");
     expect(csv).not.toMatch(/(^|,)=/m);
     expect(csv).not.toMatch(/(^|,)@/m);
@@ -256,6 +256,36 @@ describe("ExportAdapter.exportUserData", () => {
     expect(parsed[0]?.display_name_snapshot).toBe(
       '=HYPERLINK("http://evil.test","click")',
     );
+  });
+
+  it("leaves non-string values alone — a negative number is a number", async () => {
+    // The guard used to stringify FIRST, so a numeric -1234 came out as the
+    // text '-1234: a spreadsheet then read the column as text, and every sum,
+    // sort and chart over an exported amount was quietly wrong. The formula
+    // risk only exists for values a user can type; a number cannot carry one.
+    wireTables({
+      workspaces: {
+        rows: [
+          {
+            id: "ws-1",
+            name: "Personal",
+            type: "personal",
+            created_at: -1234,
+            archived_at: 0,
+            deleted_at: null,
+          },
+        ],
+      },
+    });
+
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const csv = readZip(result.value.bytes).text("espacios.csv");
+
+    expect(csv).toContain("ws-1,Personal,personal,-1234,0,\n");
+    expect(csv).not.toContain("'-1234");
   });
 
   it("escapes CSV values containing commas, quotes and newlines", async () => {
