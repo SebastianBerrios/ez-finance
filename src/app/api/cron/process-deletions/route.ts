@@ -8,11 +8,20 @@
 // never finalized: the data was retained forever while the UI promised a date.
 // Vercel Cron drives this route instead; the schedule lives in vercel.json.
 //
+// WHY IT LOOPS: process_due_deletions() finalizes at most BATCH_LIMIT accounts
+// per call, and its own default is 100. With a once-a-day schedule and users
+// who by definition never come back to trigger their own sweep, any backlog
+// above that grows monotonically and never drains. So the handler keeps asking
+// for another batch until one finalizes nothing, or until the time budget runs
+// out — whichever comes first.
+//
 // WHY IT GUARDS ITSELF: `api/` is excluded from the middleware matcher, and
-// this endpoint erases up to 1000 accounts per call. The Vercel Cron convention
-// is a CRON_SECRET bearer token, compared in constant time so the handler is
-// not itself an oracle for the secret. An ordinary browser session cannot reach
-// it: a session cookie is not an Authorization header.
+// this endpoint erases accounts in bulk. The Vercel Cron convention is a
+// CRON_SECRET bearer token, compared in constant time so the handler is not
+// itself an oracle for the secret. An ordinary browser session cannot reach it:
+// a session cookie is not an Authorization header. Every rejection is logged —
+// a rotated, typo'd or Preview-only secret otherwise kills the whole retention
+// pipeline in complete silence.
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
@@ -21,6 +30,45 @@ import { createServiceClient } from "@/shared/infrastructure/supabase/service-cl
 
 // Never prerendered, never cached: it mutates.
 export const dynamic = "force-dynamic";
+
+// The drain loop needs room to run more than one batch. 60s is the Hobby-plan
+// ceiling; the budget below stops well short of it so the last batch always
+// finishes and gets logged instead of being cut off mid-erasure.
+export const maxDuration = 60;
+
+/** The database clamps p_limit to this, and silently defaults to 100 without it. */
+const BATCH_LIMIT = 1000;
+
+/** Leaves ~10s of the maxDuration for the batch already in flight. */
+const TIME_BUDGET_MS = 50_000;
+
+interface BatchCounts {
+  readonly finalized: number;
+  readonly skipped: number;
+  readonly contended: number;
+}
+
+/**
+ * Read the jsonb payload of ez_finance.process_due_deletions().
+ *
+ * Returns null on anything unexpected. A renamed key must NOT read as zero:
+ * "nothing was due" is the one answer this job can never be allowed to fake.
+ */
+function readCounts(payload: unknown): BatchCounts | null {
+  if (payload === null || typeof payload !== "object") return null;
+
+  const { finalized, skipped, contended } = payload as Record<string, unknown>;
+
+  if (
+    typeof finalized !== "number" ||
+    typeof skipped !== "number" ||
+    typeof contended !== "number"
+  ) {
+    return null;
+  }
+
+  return { finalized, skipped, contended };
+}
 
 /**
  * Constant-time string comparison.
@@ -42,7 +90,7 @@ export async function GET(request: Request) {
     // Fail closed. An unset secret must never degrade into "no auth required"
     // on a mass-erasure endpoint. The response says nothing about why.
     console.error(
-      "[cron/process-deletions] CRON_SECRET is not configured — refusing to run",
+      "[cron/process-deletions] unauthorized: CRON_SECRET is not configured — refusing to run",
     );
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -50,31 +98,82 @@ export async function GET(request: Request) {
   const presented = request.headers.get("authorization") ?? "";
 
   if (!secretsMatch(presented, `Bearer ${secret}`)) {
+    console.error(
+      "[cron/process-deletions] unauthorized: the presented bearer token does not match CRON_SECRET",
+    );
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const startedAt = Date.now();
+  let finalized = 0;
+  let skipped = 0;
+  let contended = 0;
+  let runs = 0;
+  let drained = false;
+
   try {
     const supabase = createServiceClient();
-    const { data, error } = await supabase.rpc("process_due_deletions");
 
-    if (error) {
-      console.error(
-        "[cron/process-deletions] process_due_deletions failed:",
-        error,
-      );
-      return NextResponse.json({ error: "failed" }, { status: 500 });
+    while (Date.now() - startedAt < TIME_BUDGET_MS) {
+      const { data, error } = await supabase.rpc("process_due_deletions", {
+        p_limit: BATCH_LIMIT,
+      });
+
+      if (error) {
+        console.error(
+          "[cron/process-deletions] process_due_deletions failed:",
+          error,
+        );
+        return NextResponse.json({ error: "failed" }, { status: 500 });
+      }
+
+      const counts = readCounts(data);
+
+      if (counts === null) {
+        console.error(
+          "[cron/process-deletions] unreadable process_due_deletions payload:",
+          data,
+        );
+        return NextResponse.json({ error: "failed" }, { status: 500 });
+      }
+
+      runs += 1;
+      finalized += counts.finalized;
+      skipped += counts.skipped;
+      contended += counts.contended;
+
+      // A skipped row means a finalization threw. It will throw again next
+      // iteration and it sorts first, so looping only burns the budget.
+      if (counts.skipped > 0) break;
+
+      if (counts.finalized === 0) {
+        drained = true;
+        break;
+      }
     }
-
-    const finalized = typeof data === "number" ? data : 0;
-
-    // The only audit trail this job has.
-    console.log(
-      `[cron/process-deletions] finalized ${finalized} account deletion(s)`,
-    );
-
-    return NextResponse.json({ finalized });
   } catch (e) {
     console.error("[cron/process-deletions] unexpected failure:", e);
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
+
+  const summary =
+    `[cron/process-deletions] finalized ${finalized}, skipped ${skipped}, ` +
+    `contended ${contended} over ${runs} batch(es)` +
+    (drained ? "" : " — TIME BUDGET EXHAUSTED, a backlog remains");
+
+  if (skipped > 0) {
+    // The failure mode that matters. HTTP 200 with "finalized 0" is exactly
+    // what a completely broken pipeline used to look like, on a promise to
+    // erase this data within 30 days.
+    console.error(summary);
+    return NextResponse.json(
+      { finalized, skipped, contended, runs, drained },
+      { status: 500 },
+    );
+  }
+
+  // The only audit trail this job has.
+  console.log(summary);
+
+  return NextResponse.json({ finalized, skipped, contended, runs, drained });
 }
