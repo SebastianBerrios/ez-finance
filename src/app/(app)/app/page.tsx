@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { logoutAction } from "@/app/(app)/actions/logout.action";
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { SupabaseProfileAdapter } from "@/modules/auth/infrastructure/supabase-profile-adapter";
@@ -53,6 +55,15 @@ export default async function AppPage() {
         <p className="text-muted-foreground max-w-sm text-center text-sm">
           El dashboard completo estará disponible próximamente.
         </p>
+
+        {/* Settings navigation */}
+        <Link
+          href="/app/settings"
+          className="border-border text-muted-foreground hover:text-foreground flex w-full max-w-sm items-center justify-between rounded-xl border px-5 py-4 transition-colors hover:bg-accent/50"
+        >
+          <span className="text-sm font-medium">Configuración</span>
+          <span className="text-sm">›</span>
+        </Link>
       </div>
     </main>
   );

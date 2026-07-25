@@ -141,4 +141,69 @@ test.describe("Auth pages smoke tests", () => {
     ).toBeVisible();
     await expect(page.getByLabel(/correo electrónico/i)).toBeVisible();
   });
+
+  // -------------------------------------------------------------------------
+  // Settings + account management page smoke tests (Fase 2c tramo A)
+  // Pages are protected by middleware — unauthenticated visits redirect to /login.
+  // These tests verify the redirects happen correctly (pages exist + are protected).
+  // -------------------------------------------------------------------------
+
+  test("/app/settings redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/app/settings/profile redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/profile");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/app/settings/preferences redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/preferences");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/app/settings/security/change-password redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/security/change-password");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/app/settings/security/change-email redirects unauthenticated users to /login", async ({
+    page,
+  }) => {
+    await page.goto("/app/settings/security/change-email");
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("/set-password renders in Spanish and is responsive at 360px", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    // /set-password lives in src/app/(auth)/set-password/ — the (auth) route group
+    // strips the group name, so the public URL is /set-password (not /auth/set-password).
+    const response = await page.goto("/set-password");
+    expect(response?.status()).toBe(200);
+
+    // Spanish heading present
+    await expect(page.getByRole("heading", { name: /establecé tu nueva contraseña/i })).toBeVisible();
+
+    // Form fields present in Spanish
+    await expect(page.getByLabel(/nueva contraseña/i)).toBeVisible();
+    await expect(page.getByLabel(/confirmá la contraseña/i)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /establecer contraseña/i }),
+    ).toBeVisible();
+
+    // No horizontal overflow at 360px
+    const scrollWidth = await page.evaluate(() => document.body.scrollWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(360);
+  });
 });

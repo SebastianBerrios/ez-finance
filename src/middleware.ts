@@ -19,9 +19,13 @@ export async function middleware(request: NextRequest) {
   // Protected: /app/** requires an authenticated user
   const isApp = path.startsWith("/app");
 
-  // Auth pages: authenticated users should not see login/register
+  // Auth pages: authenticated users should not see login/register/forgot-password.
+  // /set-password is intentionally excluded: a recovery session is technically
+  // "authenticated" but the user must complete password reset before using the app.
   const isAuthPage =
-    path === "/login" || path === "/register" || path === "/forgot-password";
+    path === "/login" ||
+    path === "/register" ||
+    path === "/forgot-password";
 
   if (isApp && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
@@ -44,8 +48,10 @@ export const config = {
      * - favicon.ico
      * - public icons
      * - auth/callback (OAuth exchange route handler)
+     * - auth/reset-password (recovery code exchange route handler — must be
+     *   reachable without an active session; the handler establishes the session)
      * - api/ (route handlers)
      */
-    "/((?!_next/static|_next/image|favicon.ico|icons/|auth/callback|api/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|icons/|auth/callback|auth/reset-password|api/).*)",
   ],
 };
