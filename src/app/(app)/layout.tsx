@@ -1,27 +1,19 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 
 /**
- * Is this render actually serving a request that carries a session?
+ * Every /app render reads the session cookie, so there is nothing here to
+ * prerender.
  *
- * `next build` runs a prerender pass over every route. There is no request
- * scope there, so `cookies()` throws and bootstrapUserWorkspace() reports
- * Unavailable — seven times per build. Logging that is worse than useless: it
- * trains everyone to ignore the one message that means "authenticated users are
- * hitting a broken bootstrap".
+ * This replaces a try/catch around `cookies()` that existed to keep `next
+ * build`'s prerender pass from logging seven bogus bootstrap failures. That
+ * catch swallowed the `DynamicServerError` Next.js THROWS ON PURPOSE to mark a
+ * segment dynamic — the correct way to say "do not prerender this" is to say
+ * it, not to hide the signal.
  */
-async function hasRequestSession(): Promise<boolean> {
-  try {
-    const store = await cookies();
-    // @supabase/ssr writes the session under `sb-<ref>-auth-token[.n]`.
-    return store.getAll().some((cookie) => cookie.name.startsWith("sb-"));
-  } catch {
-    return false;
-  }
-}
+export const dynamic = "force-dynamic";
 
 /**
  * Authenticated entry point for every /app route.
@@ -44,14 +36,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // Non-fatal: the children render and surface their own "unavailable" state.
     // Logged because a permanently failing bootstrap looks, from the outside,
     // exactly like an app that lost its data.
-    if (await hasRequestSession()) {
-      console.error("[app/layout] bootstrapUserWorkspace failed:", entry.error);
-    }
+    console.error("[app/layout] bootstrapUserWorkspace failed:", entry.error);
   } else if (entry.value.kind === "DELETED") {
     // The grace window expired and the data is gone — whether this request
     // erased it or the scheduled worker did weeks ago. Handing back a rendered
-    // app would be a lie. /auth/deleted acknowledges the erasure and closes the
-    // session (a Server Component cannot) before the login notice.
+    // app would be a lie. /auth/deleted shows the notice and, once the person
+    // confirms, closes the session (a Server Component cannot write cookies).
     redirect("/auth/deleted");
   }
 

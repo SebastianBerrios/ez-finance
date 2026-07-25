@@ -50,9 +50,10 @@ export const config = {
      * - auth/callback (OAuth exchange route handler)
      * - auth/reset-password (recovery code exchange route handler — must be
      *   reachable without an active session; the handler establishes the session)
-     * - auth/deleted (terminal sign-out route handler — the middleware writes
-     *   the refreshed session cookie onto the SAME response, which would hand
-     *   back a fresh cookie and clobber the sign-out the handler just performed)
+     * - auth/deleted (terminal notice page + its sign-out Server Action — the
+     *   middleware writes the refreshed session cookie onto the SAME response,
+     *   which would hand back a fresh cookie and clobber the sign-out the
+     *   action just performed)
      * - api/ (route handlers)
      */
     "/((?!_next/static|_next/image|favicon.ico|icons/|auth/callback|auth/reset-password|auth/deleted|api/).*)",

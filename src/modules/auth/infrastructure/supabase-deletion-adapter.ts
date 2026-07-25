@@ -16,9 +16,20 @@ import {
 import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { GracePeriod } from "@/modules/auth/domain/grace-period";
 import { type Result, err, ok } from "@/shared/domain/result";
+import { createBearerClient } from "@/shared/infrastructure/supabase/bearer-client";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 
 import { mapSupabaseError } from "./error-map";
+
+export interface DeletionAdapterOptions {
+  /**
+   * Acknowledge with THIS access token instead of the cookie session.
+   *
+   * Only /auth/deleted passes it, and only because it must close the session
+   * before it stamps the acknowledgement — see bearer-client.ts.
+   */
+  readonly accessToken?: string | null;
+}
 
 // jsonb payloads returned by the RPCs.
 interface DeletionStatePayload {
@@ -48,6 +59,12 @@ function parseWindow(payload: DeletionStatePayload): GracePeriod | null {
 }
 
 export class SupabaseDeletionAdapter implements DeletionPort {
+  private readonly accessToken: string | null;
+
+  constructor(options: DeletionAdapterOptions = {}) {
+    this.accessToken = options.accessToken ?? null;
+  }
+
   async getState(_userId: string): Promise<Result<DeletionStatus, AuthError>> {
     try {
       const supabase = await createServerClient();
@@ -120,7 +137,13 @@ export class SupabaseDeletionAdapter implements DeletionPort {
 
   async acknowledge(_userId: string): Promise<Result<void, AuthError>> {
     try {
-      const supabase = await createServerClient();
+      // The ONLY method that honours accessToken: it is the only one that runs
+      // after its own caller closed the cookie session.
+      const supabase =
+        this.accessToken === null
+          ? await createServerClient()
+          : createBearerClient(this.accessToken);
+
       const { error } = await supabase.rpc("acknowledge_deletion");
 
       if (error) return err(mapSupabaseError(error));
