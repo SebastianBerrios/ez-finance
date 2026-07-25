@@ -29,6 +29,7 @@ function makeFakeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPo
     getState: vi.fn().mockResolvedValue(ok("ACTIVE")),
     request: vi.fn().mockResolvedValue(ok(fakeGracePeriod)),
     cancel: vi.fn().mockResolvedValue(ok(undefined)),
+    acknowledge: vi.fn().mockResolvedValue(ok(undefined)),
     ...overrides,
   };
 }

@@ -43,6 +43,21 @@ describe("getAuthenticatedUser", () => {
     expect(user).toBeNull();
   });
 
+  it("returns the very client that validated the session", async () => {
+    // getUser() can refresh the access token, and the refreshed token lives on
+    // the client that performed the call. A caller that validates here and then
+    // builds a SECOND client for its RPCs sends the stale token.
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "u-1" } },
+      error: null,
+    });
+
+    const { supabase } = await getAuthenticatedUser();
+
+    expect(supabase).toBeDefined();
+    expect(supabase.auth.getUser).toBe(mockGetUser);
+  });
+
   it("propagates the Auth error so callers can tell 'expired' from 'unavailable'", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: null },

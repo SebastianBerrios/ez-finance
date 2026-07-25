@@ -15,6 +15,7 @@ import { SupabaseDeletionAdapter } from "./supabase-deletion-adapter";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const REQUESTED_AT = "2026-07-25T10:00:00.000Z";
 const ENDS_AT = "2026-08-24T10:00:00.000Z";
+const FINALIZED_AT = "2026-08-24T10:05:00.000Z";
 
 function makeAdapter() {
   return new SupabaseDeletionAdapter();
@@ -90,6 +91,42 @@ describe("SupabaseDeletionAdapter.getState", () => {
       expect(result.value.grace.endsAt.toISOString()).toBe(shortEnds);
     } else {
       expect.fail("expected a grace period");
+    }
+  });
+
+  it("maps a DELETED payload to the terminal state with finalized_at", async () => {
+    // DELETED is PERSISTED state, not "this call erased the data": the batch
+    // worker finalizes most requests out of band, so the user's own sweep
+    // returns false and the terminal notice would never be reached.
+    mockRpc.mockResolvedValueOnce({
+      data: { state: "DELETED", finalized_at: FINALIZED_AT },
+      error: null,
+    });
+
+    const result = await makeAdapter().getState(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.state).toBe("DELETED");
+      expect(result.value.finalizedAt?.toISOString()).toBe(FINALIZED_AT);
+      expect(result.value.grace).toBeUndefined();
+    }
+  });
+
+  it("still reports DELETED when finalized_at is unusable", async () => {
+    // The timestamp is decoration; the terminal state is the fact. Failing the
+    // read here would drop the user back into a silently re-provisioned account.
+    mockRpc.mockResolvedValueOnce({
+      data: { state: "DELETED", finalized_at: "not-a-date" },
+      error: null,
+    });
+
+    const result = await makeAdapter().getState(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.state).toBe("DELETED");
+      expect(result.value.finalizedAt).toBeUndefined();
     }
   });
 
@@ -216,6 +253,41 @@ describe("SupabaseDeletionAdapter.cancel", () => {
     mockRpc.mockRejectedValueOnce(new Error("network down"));
 
     const result = await makeAdapter().cancel(USER_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("Unavailable");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// acknowledge — what ENDS the terminal state, so a later sign-in can start over
+// ---------------------------------------------------------------------------
+describe("SupabaseDeletionAdapter.acknowledge", () => {
+  it("calls the acknowledge_deletion RPC", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+
+    const result = await makeAdapter().acknowledge(USER_ID);
+
+    expect(mockRpc).toHaveBeenCalledWith("acknowledge_deletion");
+    expect(result.ok).toBe(true);
+  });
+
+  it("maps a session_not_found error to SessionExpired", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "session_not_found", code: "P0001" },
+    });
+
+    const result = await makeAdapter().acknowledge(USER_ID);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("SessionExpired");
+  });
+
+  it("maps a thrown transport failure to Unavailable", async () => {
+    mockRpc.mockRejectedValueOnce(new Error("network down"));
+
+    const result = await makeAdapter().acknowledge(USER_ID);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("Unavailable");

@@ -12,10 +12,22 @@ import { type Result } from "@/shared/domain/result";
 export interface DeletionStatus {
   readonly state: DeletionState;
   readonly grace?: GracePeriod;
+  /** Set if and only if `state` is "DELETED": when the erasure actually ran. */
+  readonly finalizedAt?: Date;
 }
 
 export interface DeletionPort {
   getState(userId: string): Promise<Result<DeletionStatus, AuthError>>;
   request(userId: string): Promise<Result<GracePeriod, AuthError>>;
   cancel(userId: string): Promise<Result<void, AuthError>>;
+  /**
+   * Mark a finalized erasure as seen by its owner.
+   *
+   * DELETED is reported from PERSISTED state, not from "this call erased the
+   * data" — otherwise a deletion finalized by the scheduled worker (the
+   * dominant path) never reaches the person it happened to. Acknowledging is
+   * therefore what ENDS the terminal state, so a deliberate later sign-in can
+   * start a fresh account. Idempotent.
+   */
+  acknowledge(userId: string): Promise<Result<void, AuthError>>;
 }

@@ -13,6 +13,7 @@ function makeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPort {
     getState: vi.fn().mockResolvedValue(ok({ state: "ACTIVE" })),
     request: vi.fn(),
     cancel: vi.fn(),
+    acknowledge: vi.fn(),
     ...overrides,
   };
 }

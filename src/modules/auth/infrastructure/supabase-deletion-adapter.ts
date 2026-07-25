@@ -25,6 +25,7 @@ interface DeletionStatePayload {
   state?: unknown;
   requested_at?: unknown;
   ends_at?: unknown;
+  finalized_at?: unknown;
 }
 
 /** Parse a timestamptz string; null when absent or not a real date. */
@@ -56,6 +57,19 @@ export class SupabaseDeletionAdapter implements DeletionPort {
       if (!data) return err({ kind: "Unavailable" });
 
       const payload = data as DeletionStatePayload;
+
+      if (payload.state === "DELETED") {
+        // Terminal. finalized_at is decoration, so an unparseable timestamp
+        // must NOT downgrade this to an error: failing here would send the
+        // caller back down the bootstrap path and silently re-provision the
+        // account whose data was just erased.
+        const finalizedAt = parseTimestamp(payload.finalized_at);
+        return ok(
+          finalizedAt === null
+            ? { state: "DELETED" }
+            : { state: "DELETED", finalizedAt },
+        );
+      }
 
       if (payload.state === "ACTIVE") {
         return ok({ state: "ACTIVE" });
@@ -96,6 +110,18 @@ export class SupabaseDeletionAdapter implements DeletionPort {
     try {
       const supabase = await createServerClient();
       const { error } = await supabase.rpc("cancel_account_deletion");
+
+      if (error) return err(mapSupabaseError(error));
+      return ok(undefined);
+    } catch (e) {
+      return err(mapSupabaseError(e));
+    }
+  }
+
+  async acknowledge(_userId: string): Promise<Result<void, AuthError>> {
+    try {
+      const supabase = await createServerClient();
+      const { error } = await supabase.rpc("acknowledge_deletion");
 
       if (error) return err(mapSupabaseError(error));
       return ok(undefined);

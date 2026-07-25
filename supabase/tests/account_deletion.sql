@@ -538,4 +538,228 @@ select pg_temp.check(
   'a shared workspace that still has a live member is untouched'
 );
 
+-- ===========================================================================
+-- 19. TERMINAL STATE IS PERSISTED, NOT "who ran the erasure".
+--     C was finalized by the BATCH WORKER in section 15, out of band. C's own
+--     sweep therefore returns false forever, so deriving DELETED from that
+--     boolean makes the terminal notice unreachable and silently re-provisions
+--     the account. deletion_state() must report it from the ledger instead.
+--     See 20260725164257.
+-- ===========================================================================
+select pg_temp.as_user('11111111-0000-4000-8000-000000000011');
+
+select pg_temp.check(
+  ez_finance.process_deletion_if_due() = false,
+  'the finalized user own sweep returns false (the batch worker got there first)'
+);
+
+select pg_temp.check(
+  (ez_finance.deletion_state() ->> 'state') = 'DELETED',
+  'deletion_state reports DELETED after an out-of-band finalization'
+);
+
+select pg_temp.check(
+  (ez_finance.deletion_state() ->> 'finalized_at') is not null,
+  'the DELETED payload carries finalized_at'
+);
+
+-- bootstrap() must REFUSE while the erasure is unacknowledged. Silently
+-- re-provisioning is the bug: the user gets a working empty account and no
+-- hint that everything they had was destroyed.
+do $$
+begin
+  perform ez_finance.bootstrap();
+  raise exception 'FAIL: bootstrap must refuse an unacknowledged deletion';
+exception
+  when sqlstate 'P0001' then
+    if sqlerrm = 'account_deleted' then
+      raise notice 'PASS: bootstrap refuses while the deletion is unacknowledged';
+    else
+      raise exception 'FAIL: unexpected message %', sqlerrm;
+    end if;
+end;
+$$;
+
+select pg_temp.as_postgres();
+select pg_temp.check(
+  not exists (select 1 from ez_finance.profiles where id = '11111111-0000-4000-8000-000000000011'),
+  'the refused bootstrap created no profile'
+);
+
+-- acknowledge_deletion() is the deliberate "I saw the notice" step. Only after
+-- it does a later sign-in start a fresh account.
+select pg_temp.as_user('11111111-0000-4000-8000-000000000011');
+select ez_finance.acknowledge_deletion();
+
+select pg_temp.check(
+  (ez_finance.deletion_state() ->> 'state') = 'ACTIVE',
+  'acknowledging the deletion clears the terminal state'
+);
+
+select pg_temp.check(
+  ez_finance.bootstrap() is not null,
+  'bootstrap works again once the deletion is acknowledged'
+);
+
+-- Idempotent: the route handler may retry it.
+select ez_finance.acknowledge_deletion();
+
+select pg_temp.as_postgres();
+select pg_temp.check(
+  not has_function_privilege('anon', 'ez_finance.acknowledge_deletion()', 'execute')
+  and has_function_privilege('authenticated', 'ez_finance.acknowledge_deletion()', 'execute'),
+  'acknowledge_deletion is authenticated-only'
+);
+
+-- ===========================================================================
+-- 20. p_limit actually bounds the batch. See 20260725164259.
+-- ===========================================================================
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values
+  ('66666666-0000-4000-8000-000000000016', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'i@test.local', '', now(), now(), now()),
+  ('77777777-0000-4000-8000-000000000017', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'j@test.local', '', now(), now(), now()),
+  ('88888888-0000-4000-8000-000000000018', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'k@test.local', '', now(), now(), now());
+
+select pg_temp.as_user('66666666-0000-4000-8000-000000000016');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+select pg_temp.as_user('77777777-0000-4000-8000-000000000017');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+select pg_temp.as_user('88888888-0000-4000-8000-000000000018');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+select pg_temp.as_postgres();
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id in (
+  '66666666-0000-4000-8000-000000000016',
+  '77777777-0000-4000-8000-000000000017',
+  '88888888-0000-4000-8000-000000000018'
+)
+and    cancelled_at is null and finalized_at is null;
+
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions(2) = 2,
+  'p_limit bounds the batch to two requests'
+);
+
+-- p_limit <= 0 means "unspecified", NOT "do nothing". Clamping to zero made
+-- process_due_deletions(0) return 0 forever and look like "nothing was due".
+select pg_temp.check(
+  ez_finance.process_due_deletions(0) = 1,
+  'p_limit 0 falls back to the default instead of clamping to zero'
+);
+
+-- ===========================================================================
+-- 21. A POISON ROW MUST NOT FREEZE THE PIPELINE.
+--     The driving select is ordered by ends_at, so a row that always fails is
+--     first on every subsequent run. Without per-row exception handling one bad
+--     row aborts the whole transaction and deletion stops for everybody,
+--     permanently. See 20260725164259.
+-- ===========================================================================
+select pg_temp.as_postgres();
+insert into auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
+values
+  ('99999999-0000-4000-8000-000000000019', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'poison@test.local', '', now(), now(), now()),
+  ('aaaaaaaa-0000-4000-8000-000000000020', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'healthy@test.local', '', now(), now(), now());
+
+select pg_temp.as_user('99999999-0000-4000-8000-000000000019');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+select pg_temp.as_user('aaaaaaaa-0000-4000-8000-000000000020');
+select ez_finance.bootstrap();
+select ez_finance.request_account_deletion();
+
+select pg_temp.as_postgres();
+-- The poison row is the OLDEST due request, so it is first in every batch.
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '10 minutes'
+where  user_id = '99999999-0000-4000-8000-000000000019'
+and    cancelled_at is null and finalized_at is null;
+update ez_finance_private.deletion_requests
+set    ends_at = now() - interval '1 second'
+where  user_id = 'aaaaaaaa-0000-4000-8000-000000000020'
+and    cancelled_at is null and finalized_at is null;
+
+-- Simulate an erasure that always fails for one user (an FK, a broken trigger,
+-- a constraint added later — the cause does not matter, the blast radius does).
+create function public.ez_finance_test_poison() returns trigger
+  language plpgsql as $$
+begin
+  if old.id = '99999999-0000-4000-8000-000000000019' then
+    raise exception 'poison row';
+  end if;
+  return old;
+end;
+$$;
+create trigger ez_finance_test_poison
+  before delete on ez_finance.profiles
+  for each row execute function public.ez_finance_test_poison();
+
+select pg_temp.as_service_role();
+select pg_temp.check(
+  ez_finance.process_due_deletions() = 1,
+  'a poison row is skipped and the rest of the batch still finalizes'
+);
+
+select pg_temp.as_postgres();
+select pg_temp.check(
+  not exists (select 1 from ez_finance.profiles where id = 'aaaaaaaa-0000-4000-8000-000000000020'),
+  'the healthy request behind the poison row was finalized'
+);
+select pg_temp.check(
+  exists (select 1 from ez_finance.profiles where id = '99999999-0000-4000-8000-000000000019'),
+  'the poison request was left pending, not counted'
+);
+
+drop trigger ez_finance_test_poison on ez_finance.profiles;
+drop function public.ez_finance_test_poison();
+
+-- ===========================================================================
+-- 22. The batch worker refuses any JWT role other than service_role, IN THE
+--     BODY — not only at the grant. One re-run of the fleet onboarding step
+--     ("grant all on routines in schema ez_finance to anon, authenticated,
+--     service_role") would otherwise hand the public anon key a 1000-account
+--     erasure endpoint. That default already fired once on this schema.
+-- ===========================================================================
+select pg_temp.as_postgres();
+
+do $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-0000-4000-8000-000000000001', 'role', 'authenticated')::text, false);
+  perform ez_finance.process_due_deletions();
+  raise exception 'FAIL: an authenticated JWT must not run the batch worker';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: authenticated JWT refused in the function body';
+end;
+$$;
+
+do $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, false);
+  perform ez_finance.process_due_deletions();
+  raise exception 'FAIL: an anon JWT must not run the batch worker';
+exception
+  when insufficient_privilege then
+    raise notice 'PASS: anon JWT refused in the function body';
+end;
+$$;
+
+select pg_temp.as_postgres();
+
+-- A service_role JWT is accepted (this is the Edge Function / cron caller).
+do $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, false);
+  perform ez_finance.process_due_deletions();
+  raise notice 'PASS: a service_role JWT is accepted';
+end;
+$$;
+
+select pg_temp.as_postgres();
+
 \echo 'ALL CHECKS PASSED'

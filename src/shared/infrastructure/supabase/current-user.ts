@@ -15,6 +15,11 @@ import { cache } from "react";
 
 import { createServerClient } from "./server";
 
+// The client is returned alongside the user on purpose. getUser() can REFRESH
+// the access token, and that refreshed token lives on the client instance that
+// performed the call. A caller that validates here and then issues its RPCs on
+// a second, separately built client sends the stale token instead — so anyone
+// who needs both takes the client from here rather than building their own.
 export const getAuthenticatedUser = cache(async () => {
   const supabase = await createServerClient();
   const {
@@ -22,5 +27,5 @@ export const getAuthenticatedUser = cache(async () => {
     error,
   } = await supabase.auth.getUser();
 
-  return { user, error };
+  return { supabase, user, error };
 });
