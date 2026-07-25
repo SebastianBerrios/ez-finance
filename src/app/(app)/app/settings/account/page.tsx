@@ -100,17 +100,29 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
             Eliminar mi cuenta
           </h2>
 
-          {!status.ok && (
-            <p
-              role="alert"
-              className="bg-destructive/10 text-destructive mb-4 rounded-lg px-4 py-3 text-sm"
-            >
-              No pudimos leer el estado de tu cuenta. Volvé a intentarlo en unos
-              minutos.
-            </p>
-          )}
-
-          {pendingGrace ? (
+          {/* FAIL CLOSED. When the lifecycle read fails we know nothing: the
+              account may already be inside the grace window. Rendering the
+              delete form would offer deletion to someone who already requested
+              it, while the cancel button — their way out — stays hidden. So
+              neither form renders; only the error and a way to retry. */}
+          {!status.ok ? (
+            <>
+              <p
+                role="alert"
+                className="bg-destructive/10 text-destructive mb-4 rounded-lg px-4 py-3 text-sm"
+              >
+                No pudimos leer el estado de tu cuenta, así que no mostramos
+                estas opciones para no hacer algo que no querías. Volvé a
+                intentarlo en unos minutos.
+              </p>
+              <a
+                href="/app/settings/account"
+                className="border-border hover:bg-accent inline-flex h-10 w-full items-center justify-center rounded-md border px-4 text-sm font-medium transition-colors"
+              >
+                Reintentar
+              </a>
+            </>
+          ) : pendingGrace ? (
             <CancelDeletionForm
               action={cancelAccountDeletionAction}
               deadlineLabel={deadlineFormatter.format(pendingGrace.endsAt)}
