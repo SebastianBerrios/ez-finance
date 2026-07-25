@@ -35,6 +35,19 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </div>
       )}
 
+      {deletion === "completed" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-muted mb-4 rounded-lg px-4 py-3 text-sm"
+        >
+          Venció el plazo de 30 días y eliminamos tus datos de ez finance: tu
+          perfil y tus espacios personales ya no existen. Tu cuenta de acceso
+          sigue disponible para otras aplicaciones, y si ingresás de nuevo vas a
+          empezar desde cero.
+        </div>
+      )}
+
       {/* Google OAuth — requires Google provider configured in Supabase dashboard */}
       <GoogleButton />
 

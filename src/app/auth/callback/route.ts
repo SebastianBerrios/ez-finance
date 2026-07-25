@@ -46,5 +46,12 @@ export async function GET(request: NextRequest) {
     console.warn("[auth/callback] bootstrapUserWorkspace failed:", bootstrapResult.error);
   }
 
+  // The grace window expired and this sign-in is what erased the data. Sending
+  // the user to /app would show them a freshly bootstrapped empty account with
+  // no explanation; /auth/deleted closes the session and says what happened.
+  if (bootstrapResult.ok && bootstrapResult.value.kind === "DELETED") {
+    return NextResponse.redirect(new URL("/auth/deleted", origin));
+  }
+
   return NextResponse.redirect(new URL("/app", origin));
 }

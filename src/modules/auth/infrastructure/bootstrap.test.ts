@@ -1,8 +1,9 @@
 // bootstrap.test.ts — unit tests for the authenticated-entry helper.
-// Focus: the due-deletion sweep runs BEFORE the workspace bootstrap. Getting
-// that order wrong would let bootstrap() recreate a profile that the deletion
-// then erases, leaving the user with no profile at all.
-import { describe, expect, it, vi, beforeEach } from "vitest";
+// Focus: the due-deletion sweep runs BEFORE the workspace bootstrap, and a
+// sweep that actually erased the account STOPS the entry instead of quietly
+// rebuilding it. Getting either wrong hands the user a working empty account
+// and makes the terminal DELETED state unreachable.
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const { mockRpc, mockGetUser } = vi.hoisted(() => ({
   mockRpc: vi.fn(),
@@ -29,10 +30,19 @@ function rpcResolves(overrides: Record<string, unknown> = {}) {
   mockRpc.mockImplementation(async (name: string) => results[name]);
 }
 
+// Kept out of vi.restoreAllMocks(): that would also strip the implementation
+// off the hoisted createServerClient mock and every later test would blow up.
+let consoleError: ReturnType<typeof vi.spyOn>;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetUser.mockResolvedValue({ data: { user: { id: "u-1" } }, error: null });
   rpcResolves();
+});
+
+afterEach(() => {
+  consoleError.mockRestore();
 });
 
 describe("bootstrapUserWorkspace", () => {
@@ -40,7 +50,11 @@ describe("bootstrapUserWorkspace", () => {
     const result = await bootstrapUserWorkspace();
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.workspaceId).toBe(WORKSPACE_ID);
+    if (result.ok && result.value.kind === "READY") {
+      expect(result.value.workspaceId).toBe(WORKSPACE_ID);
+    } else {
+      expect.unreachable("expected a READY entry");
+    }
   });
 
   it("sweeps a due deletion before bootstrapping the workspace", async () => {
@@ -49,6 +63,20 @@ describe("bootstrapUserWorkspace", () => {
     expect(mockRpc.mock.calls.map((call) => call[0])).toEqual([
       "process_deletion_if_due",
       "bootstrap",
+    ]);
+  });
+
+  it("reports DELETED and does NOT bootstrap when the sweep erased the account", async () => {
+    // Bootstrapping here would recreate the profile and a fresh 'Personal'
+    // workspace in the very request that destroyed them.
+    rpcResolves({ process_deletion_if_due: { data: true, error: null } });
+
+    const result = await bootstrapUserWorkspace();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.kind).toBe("DELETED");
+    expect(mockRpc.mock.calls.map((call) => call[0])).toEqual([
+      "process_deletion_if_due",
     ]);
   });
 
@@ -63,6 +91,21 @@ describe("bootstrapUserWorkspace", () => {
 
     expect(result.ok).toBe(true);
     expect(mockRpc.mock.calls.map((call) => call[0])).toContain("bootstrap");
+  });
+
+  it("logs a failing sweep instead of swallowing it", async () => {
+    // A permanently failing sweep means data is retained past the promised
+    // date. Invisible failure is how that lasts for months.
+    rpcResolves({
+      process_deletion_if_due: { data: null, error: { message: "boom" } },
+    });
+
+    await bootstrapUserWorkspace();
+
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("process_deletion_if_due"),
+      expect.objectContaining({ message: "boom" }),
+    );
   });
 
   it("does not call any RPC when there is no session", async () => {

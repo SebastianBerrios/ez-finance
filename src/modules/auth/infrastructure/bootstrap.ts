@@ -9,6 +9,20 @@ import { createServerClient } from "@/shared/infrastructure/supabase/server";
 import { mapSupabaseError } from "./error-map";
 
 /**
+ * What an authenticated entry resolved to.
+ *
+ * DELETED is terminal: the grace window expired and this request is the one
+ * that erased the data. It is NOT a variant of READY with an empty workspace —
+ * bootstrap() deliberately does not run, because recreating the profile and a
+ * fresh 'Personal' workspace in the same request would hand the user a working
+ * empty account with no hint that everything they had was just destroyed, and
+ * would make the terminal state unreachable.
+ */
+export type AuthenticatedEntry =
+  | { readonly kind: "READY"; readonly workspaceId: string }
+  | { readonly kind: "DELETED" };
+
+/**
  * bootstrapUserWorkspace — idempotent.
  * Calls ez_finance.bootstrap() which:
  *   1. Returns existing Personal workspace_id if already bootstrapped.
@@ -17,7 +31,7 @@ import { mapSupabaseError } from "./error-map";
  * Validates authentication server-side before the RPC call (getUser() first).
  */
 export async function bootstrapUserWorkspace(): Promise<
-  Result<{ workspaceId: string }, AuthError>
+  Result<AuthenticatedEntry, AuthError>
 > {
   try {
     const supabase = await createServerClient();
@@ -34,9 +48,27 @@ export async function bootstrapUserWorkspace(): Promise<
     // Pull-based deletion finalization (pg_cron is not available in the shared
     // project). This MUST run before bootstrap(): if a due request finalized
     // after the bootstrap, it would erase the profile that bootstrap just
-    // recreated. A transient failure here is non-fatal — the request stays
-    // pending and the next authenticated entry retries it.
-    await supabase.rpc("process_deletion_if_due");
+    // recreated.
+    const { data: swept, error: sweepError } = await supabase.rpc(
+      "process_deletion_if_due",
+    );
+
+    if (sweepError) {
+      // Non-fatal on purpose — the request stays pending and the next
+      // authenticated entry retries it. But it is LOGGED: a permanently failing
+      // sweep means data is being retained past the date the UI promised, and
+      // silence is how that goes unnoticed for months.
+      console.error(
+        "[auth/bootstrap] process_deletion_if_due failed:",
+        sweepError,
+      );
+    }
+
+    if (swept === true) {
+      // The erasure happened in THIS request. Stop here: the caller signs the
+      // user out and routes to the "your data was deleted" notice.
+      return ok({ kind: "DELETED" });
+    }
 
     // Call the bootstrap RPC — returns uuid (workspace_id)
     const { data, error } = await supabase.rpc("bootstrap");
@@ -44,7 +76,7 @@ export async function bootstrapUserWorkspace(): Promise<
     if (error) return err(mapSupabaseError(error));
     if (!data) return err({ kind: "Unavailable" });
 
-    return ok({ workspaceId: data as string });
+    return ok({ kind: "READY", workspaceId: data as string });
   } catch (e) {
     return err(mapSupabaseError(e));
   }

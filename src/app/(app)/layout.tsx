@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
@@ -17,7 +18,19 @@ import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap"
  * session simply makes this a no-op.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  await bootstrapUserWorkspace();
+  const entry = await bootstrapUserWorkspace();
+
+  if (!entry.ok) {
+    // Non-fatal: the children render and surface their own "unavailable" state.
+    // Logged because a permanently failing bootstrap looks, from the outside,
+    // exactly like an app that lost its data.
+    console.error("[app/layout] bootstrapUserWorkspace failed:", entry.error);
+  } else if (entry.value.kind === "DELETED") {
+    // The grace window expired and this request erased the data. Handing back
+    // a rendered app would be a lie. /auth/deleted closes the session (a Server
+    // Component cannot) and lands on the login notice.
+    redirect("/auth/deleted");
+  }
 
   return <div className="flex min-h-screen w-full flex-col">{children}</div>;
 }
