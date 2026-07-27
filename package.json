@@ -4,14 +4,16 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:remote": "node --env-file-if-exists=.env.remote.local node_modules/next/dist/bin/next dev",
     "build": "next build",
     "start": "next start",
+    "start:remote": "node --env-file-if-exists=.env.remote.local node_modules/next/dist/bin/next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --project=integration",
+    "test:integration": "node --env-file-if-exists=.env.test.local node_modules/vitest/vitest.mjs run --project=integration",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
