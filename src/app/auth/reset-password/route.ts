@@ -7,8 +7,11 @@
 // The route is excluded from the middleware matcher — it must be reachable
 // without an active session.
 //
+// The recovery mail reaches this URL because requestPasswordRecovery() passes
+// an explicit redirectTo built from the request origin — mvp-lab's shared Site
+// URL would otherwise send ez finance's users into another fleet app.
+//
 // NOTE: Recovery EMAIL delivery is deferred until Resend SMTP is configured.
-// This code path (code exchange + redirect to set-password) is correct and ready.
 import { type NextRequest, NextResponse } from "next/server";
 
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
@@ -35,7 +38,9 @@ export async function GET(request: NextRequest) {
 
     // Session established as recovery type.
     // Redirect to the form where the user sets their new password.
-    return NextResponse.redirect(new URL("/auth/set-password", origin));
+    // NOT "/auth/set-password": the page lives in the (auth) route GROUP, which
+    // contributes no path segment, so the route is "/set-password".
+    return NextResponse.redirect(new URL("/set-password", origin));
   } catch {
     return NextResponse.redirect(
       new URL("/forgot-password?error=link_expired", origin),
