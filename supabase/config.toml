@@ -348,13 +348,19 @@ email_optional = false
 # Google OAuth provider — slice 2b
 # Requires provisioning:
 #   1. Google Cloud Console: create an OAuth 2.0 Client ID (Web application type)
-#      and add https://vzxrsvqnxkoiuwvdozxv.supabase.co/auth/v1/callback as an
-#      authorized redirect URI (for the hosted/remote project).
+#      and add BOTH callbacks as authorized redirect URIs:
+#        https://vzxrsvqnxkoiuwvdozxv.supabase.co/auth/v1/callback   hosted/remote
+#        http://127.0.0.1:54331/auth/v1/callback                     local stack
+#      The local one uses the [api] port set at the top of this file (54331), NOT
+#      the CLI's default 54321. Miss it and Google rejects the local flow only.
 #   2. Supabase dashboard (mvp-lab project): Auth > Providers > Google > enable,
 #      paste the Client ID and Secret from step 1.
 #   3. Auth > URL Configuration: add the app's site URL and redirect URLs.
-#   For local development: set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and
-#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET in .env.local (see .env.example).
+#   For local development: put SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET in a plain `.env` at the REPO ROOT.
+#   That is the ONLY file the CLI substitutes env() from — not `.env.local`
+#   (the CLI never reads it) and not `supabase/functions/.env` (Edge Functions
+#   only). Changes here need `supabase stop && supabase start` to take effect.
 [auth.external.google]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
