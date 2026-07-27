@@ -12,12 +12,22 @@ const {
   mockGetUser,
   mockSignOut,
   mockUpdateUser,
+  mockSignUp,
+  mockResetPasswordForEmail,
+  mockGetRequestOrigin,
 } = vi.hoisted(() => ({
   mockSignInWithOAuth: vi.fn(),
   mockExchangeCodeForSession: vi.fn(),
   mockGetUser: vi.fn(),
   mockSignOut: vi.fn(),
   mockUpdateUser: vi.fn(),
+  mockSignUp: vi.fn(),
+  mockResetPasswordForEmail: vi.fn(),
+  mockGetRequestOrigin: vi.fn(),
+}));
+
+vi.mock("@/shared/infrastructure/http/origin", () => ({
+  getRequestOrigin: mockGetRequestOrigin,
 }));
 
 // ---------------------------------------------------------------------------
@@ -32,10 +42,13 @@ vi.mock("@/shared/infrastructure/supabase/server", () => ({
       getUser: mockGetUser,
       signOut: mockSignOut,
       updateUser: mockUpdateUser,
+      signUp: mockSignUp,
+      resetPasswordForEmail: mockResetPasswordForEmail,
     },
   }),
 }));
 
+import { type Email } from "@/modules/auth/domain/email";
 import { makePassword } from "@/modules/auth/domain/password";
 
 import { SupabaseAuthAdapter } from "./supabase-auth-adapter";
@@ -46,6 +59,96 @@ import { SupabaseAuthAdapter } from "./supabase-auth-adapter";
 function makeAdapter() {
   return new SupabaseAuthAdapter();
 }
+
+function makeEmail(value: string): Email {
+  return { value };
+}
+
+// ---------------------------------------------------------------------------
+// Transactional-email redirects.
+//
+// mvp-lab is ONE Supabase project shared by the fleet, so its Site URL is a
+// single default that belongs to nobody. Every link Supabase mails out —
+// signup confirmation, password recovery, email change — must carry an
+// explicit redirect built from the origin of the request that triggered it,
+// or the mail lands on whichever app happens to own the Site URL.
+//
+// Recovery and email-change send a link REGARDLESS of enable_confirmations,
+// so these are not conditional on the signup-confirmation setting.
+// ---------------------------------------------------------------------------
+describe("SupabaseAuthAdapter transactional-email redirects", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRequestOrigin.mockResolvedValue("https://ez-finance.vercel.app");
+    mockSignUp.mockResolvedValue({ error: null });
+    mockResetPasswordForEmail.mockResolvedValue({ error: null });
+    mockUpdateUser.mockResolvedValue({ error: null });
+  });
+
+  it("register points the confirmation link at this deployment's callback", async () => {
+    await makeAdapter().register(
+      makeEmail("someone@example.com"),
+      makePassword("N3wPassw0rd!"),
+    );
+
+    expect(mockSignUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          emailRedirectTo: "https://ez-finance.vercel.app/auth/callback",
+        }),
+      }),
+    );
+  });
+
+  it("requestPasswordRecovery points the link at this deployment's exchange route", async () => {
+    await makeAdapter().requestPasswordRecovery(makeEmail("someone@example.com"));
+
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
+      "someone@example.com",
+      expect.objectContaining({
+        redirectTo: "https://ez-finance.vercel.app/auth/reset-password",
+      }),
+    );
+  });
+
+  it("changeEmail points the confirmation link at this deployment's callback", async () => {
+    await makeAdapter().changeEmail(makeEmail("new@example.com"));
+
+    expect(mockUpdateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ email: "new@example.com" }),
+      expect.objectContaining({
+        emailRedirectTo: "https://ez-finance.vercel.app/auth/callback",
+      }),
+    );
+  });
+
+  it("follows the request origin instead of hardcoding a deployment", async () => {
+    // Same code must work from localhost, a Vercel preview, and production —
+    // hardcoding any one of them re-creates the shared-Site-URL bug.
+    mockGetRequestOrigin.mockResolvedValue("http://localhost:3000");
+
+    await makeAdapter().requestPasswordRecovery(makeEmail("someone@example.com"));
+
+    expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
+      "someone@example.com",
+      expect.objectContaining({
+        redirectTo: "http://localhost:3000/auth/reset-password",
+      }),
+    );
+  });
+
+  it("still reports success generically when recovery cannot resolve an origin", async () => {
+    // requestPasswordRecovery must never become an enumeration oracle, and it
+    // must not start throwing just because the header read failed.
+    mockGetRequestOrigin.mockRejectedValue(new Error("no request scope"));
+
+    const result = await makeAdapter().requestPasswordRecovery(
+      makeEmail("someone@example.com"),
+    );
+
+    expect(result.ok).toBe(true);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // initiateGoogleLogin
