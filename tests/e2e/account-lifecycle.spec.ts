@@ -8,10 +8,11 @@
 //   pnpm test:e2e
 //
 // DO NOT run it against a server you started yourself. `pnpm dev` / `pnpm start`
-// read .env.local, which points at the SHARED hosted mvp-lab project, and this
-// spec registers users, erases them and writes deletion-request rows.
-// playwright.config.ts sets reuseExistingServer:false precisely so it can vouch
-// for the credentials the browser is driving.
+// read .env.local, and what that points at is a convention that has drifted to
+// the SHARED hosted mvp-lab project before — while this spec registers users,
+// erases them and writes deletion-request rows. playwright.config.ts sets
+// reuseExistingServer:false precisely so it can vouch for the credentials the
+// browser is driving.
 //
 // This is the only test that exercises the adapter <-> real RPC seam: the unit
 // tests mock the Supabase client, so a wrong RPC name, a renamed jsonb key or a

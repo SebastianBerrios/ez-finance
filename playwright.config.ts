@@ -1,16 +1,18 @@
 // Playwright configuration.
 //
 // THE ENV BLOCK BELOW IS A SAFETY DEVICE, NOT CONVENIENCE. `pnpm start` reads
-// .env.local, which points at the SHARED hosted mvp-lab project — one
+// .env.local, and what that file points at is a CONVENTION, not a guarantee —
+// it has pointed at the SHARED hosted mvp-lab project before, which is one
 // auth.users pool for every app in the fleet. tests/e2e/account-lifecycle.spec
-// registers users, erases them and writes deletion-request rows, and its SQL
-// helpers reach into the LOCAL docker container. If the browser drove an app
-// wired to the hosted project, the test would create real accounts there and
-// clean up nothing.
+// and tests/e2e/password-recovery.spec register users, erase them and write
+// deletion-request rows, and their SQL helpers reach into the LOCAL docker
+// container. If the browser drove an app wired to the hosted project, they
+// would create real accounts there and clean up nothing.
 //
-// So the server under test is pinned to the local stack, and it is never
-// reused: an already-running `pnpm dev` is exactly the process that would be
-// pointing at the hosted project.
+// So the server under test is pinned to whatever the CLI reports as the local
+// stack, and it is never reused: an already-running `pnpm dev` is a process
+// whose credentials this config cannot vouch for. The gated specs additionally
+// prove — with psql — that the row they just created is in the local container.
 import { execFileSync } from "node:child_process";
 
 import { defineConfig, devices } from "@playwright/test";
@@ -21,6 +23,8 @@ const UNREACHABLE_URL = "http://127.0.0.1:1";
 interface LocalStack {
   url: string;
   publishableKey: string;
+  /** Where the local stack captures outgoing mail. Empty when unavailable. */
+  mailpitUrl: string;
 }
 
 function probeLocalStack(): LocalStack | null {
@@ -49,9 +53,11 @@ function probeLocalStack(): LocalStack | null {
     >;
     const url = status["API_URL"];
     const publishableKey = status["PUBLISHABLE_KEY"] ?? status["ANON_KEY"];
+    // Older CLIs called it Inbucket. password-recovery.spec skips without it.
+    const mailpitUrl = status["MAILPIT_URL"] ?? status["INBUCKET_URL"] ?? "";
 
     if (!url || !publishableKey) return null;
-    return { url, publishableKey };
+    return { url, publishableKey, mailpitUrl };
   } catch {
     // No stack, no CLI, no docker. The gated specs skip themselves.
     return null;
@@ -69,12 +75,17 @@ function localStack(): LocalStack | null {
   if (cachedUrl !== undefined) {
     return cachedUrl === ""
       ? null
-      : { url: cachedUrl, publishableKey: process.env["E2E_SUPABASE_KEY"] ?? "" };
+      : {
+          url: cachedUrl,
+          publishableKey: process.env["E2E_SUPABASE_KEY"] ?? "",
+          mailpitUrl: process.env["E2E_MAILPIT_URL"] ?? "",
+        };
   }
 
   const stack = probeLocalStack();
   process.env["E2E_SUPABASE_URL"] = stack?.url ?? "";
   process.env["E2E_SUPABASE_KEY"] = stack?.publishableKey ?? "";
+  process.env["E2E_MAILPIT_URL"] = stack?.mailpitUrl ?? "";
   return stack;
 }
 
