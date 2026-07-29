@@ -22,20 +22,19 @@
 // guards is invisible from the app side by construction; the only witness is the
 // captured email. That is the whole reason the bug shipped in the first place.
 //
-// COVERAGE, AND THE ONE GAP
+// COVERAGE — all three mailing paths
 //
-//   requestPasswordRecovery  -> covered below. Mails a link unconditionally.
-//   changeEmail              -> covered below. Mails unconditionally too, and
-//                               twice while double_confirm_changes is on.
-//   register (signUp)        -> NOT COVERED HERE, and not by omission. Supabase
-//                               only mails a signup confirmation when
-//                               [auth] enable_confirmations is true, and the
-//                               local stack has it false. Turning it on would
-//                               make every other spec's "register then log in"
-//                               fail on an unconfirmed address, so covering it
-//                               is a deliberate config decision, not a test
-//                               change. Its redirect stays unit-tested only —
-//                               see supabase-auth-adapter.test.ts.
+//   register (signUp)        -> covered. Only mails while
+//                               [auth] enable_confirmations is true, which it is:
+//                               that setting closes an enumeration oracle on the
+//                               register form, see supabase/config.toml.
+//   requestPasswordRecovery  -> covered. Mails a link unconditionally.
+//   changeEmail              -> covered. Mails unconditionally too, and twice
+//                               while double_confirm_changes is on.
+//
+// Because confirmations are on, a fresh signup holds NO session until the link is
+// clicked, so anything here that needs one confirms the address first (see
+// confirmEmail) and signs in deliberately.
 import { execFileSync } from "node:child_process";
 
 import { expect, test, type Page } from "@playwright/test";
@@ -104,70 +103,117 @@ function deleteFixtureAccounts(emails: string[]): void {
   );
 }
 
-async function clearMailbox(): Promise<void> {
-  await fetch(`${MAILPIT_URL}/api/v1/messages`, { method: "DELETE" });
-}
-
 /**
- * Wait until Mailpit holds at least `expected` messages, then return their
- * bodies. Waiting for a COUNT rather than for "any mail" matters for the
- * email-change flow: double_confirm_changes sends two, and grabbing whichever
- * arrived first would assert on the winner of a race.
+ * Mark the address confirmed, the way clicking the emailed link would.
+ *
+ * enable_confirmations is ON, so a fresh signup holds no session. Only
+ * email_confirmed_at is written: auth.users.confirmed_at is a GENERATED column
+ * and assigning to it errors.
  */
-async function waitForMails(expected: number): Promise<string[]> {
-  for (let attempt = 0; attempt < 24; attempt++) {
-    const list = (await (
-      await fetch(`${MAILPIT_URL}/api/v1/messages`)
-    ).json()) as { messages?: { ID: string }[] };
-
-    const ids = (list.messages ?? []).map((message) => message.ID);
-    if (ids.length >= expected) {
-      return Promise.all(
-        ids.map(async (id) => {
-          const full = (await (
-            await fetch(`${MAILPIT_URL}/api/v1/message/${id}`)
-          ).json()) as { Text?: string; HTML?: string };
-          return `${full.Text ?? ""}${full.HTML ?? ""}`;
-        }),
-      );
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-
-  throw new Error(
-    `expected ${expected} message(s) at Mailpit (${MAILPIT_URL}); timed out`,
+function confirmEmail(email: string): void {
+  sql(
+    `update auth.users set email_confirmed_at = now() where email = '${email}'`,
   );
 }
 
 /**
- * Supabase never links straight at the app. The mailed URL always hits its own
- * /auth/v1/verify, carrying our redirect as the `redirect_to` query parameter,
- * and only 302s onward once the token is consumed. So `redirect_to` — not the
- * link's own origin — is the thing under test.
+ * Wait until Mailpit holds `expected` messages ADDRESSED TO THIS FIXTURE, and
+ * return their bodies.
+ *
+ * Selecting by recipient rather than emptying the box and counting is what makes
+ * these tests safe to run beside anything else. Confirmations are on, so EVERY
+ * registration anywhere in the suite now mails — account-lifecycle.spec alone
+ * adds two — and a shared mailbox made both directions wrong: a foreign mail
+ * inflated the count, and clearing the box could delete another spec's mail
+ * before it read it. Nothing here mutates the mailbox any more.
+ *
+ * The address's local part is the fixture's unique token, and the email-change
+ * flow mails `next.<address>` as well, so a substring match catches both.
  */
-function verificationLinksIn(bodies: string[], expected: number): URL[] {
-  // Deduplicated, because each message carries the same link in its plain-text
-  // AND html parts and both are searched — raw matches would double every count.
-  const byHref = new Map<string, URL>();
+async function mailBodiesFor(address: string): Promise<string[]> {
+  const token = address.split("@")[0]!;
 
-  for (const body of bodies) {
-    for (const candidate of body.match(/https?:\/\/[^\s"'<>]+/g) ?? []) {
-      if (!candidate.includes("token") && !candidate.includes("code=")) continue;
-      const href = candidate.replace(/&amp;/g, "&");
-      if (!byHref.has(href)) byHref.set(href, new URL(href));
-    }
+  interface Listed {
+    ID: string;
+    To?: { Address?: string }[];
   }
 
-  const links = [...byHref.values()];
+  const list = (await (
+    await fetch(`${MAILPIT_URL}/api/v1/messages?limit=200`)
+  ).json()) as { messages?: Listed[] };
 
-  // Counted, not merely non-empty: asserting "at least one" would let a mail
-  // that carries NO link pass on the strength of its sibling, which is exactly
-  // what the two-confirmation case has to rule out.
+  const mine = (list.messages ?? []).filter((message) =>
+    (message.To ?? []).some((to) => (to.Address ?? "").includes(token)),
+  );
+
+  return Promise.all(
+    mine.map(async (message) => {
+      const full = (await (
+        await fetch(`${MAILPIT_URL}/api/v1/message/${message.ID}`)
+      ).json()) as { Text?: string; HTML?: string };
+      return `${full.Text ?? ""}${full.HTML ?? ""}`;
+    }),
+  );
+}
+
+/**
+ * The verification links of one `type` sent to one fixture address.
+ *
+ * Supabase never links straight at the app: the mailed URL always hits its own
+ * /auth/v1/verify carrying our redirect as the `redirect_to` query parameter, and
+ * only 302s onward once the token is consumed. So `redirect_to` — not the link's
+ * own origin — is what these tests assert on, and `type` is how they tell the
+ * mails apart.
+ *
+ * Selecting by recipient AND type, rather than emptying the mailbox and counting,
+ * is what makes these tests safe beside each other and beside anything else.
+ * Confirmations are on, so every registration in the suite now mails — one
+ * fixture here legitimately receives a `signup` AND two `email_change` messages —
+ * and a shared mailbox made both directions wrong: a foreign mail inflated the
+ * count, and clearing the box could delete another spec's mail before it read it.
+ * Nothing here mutates the mailbox.
+ *
+ * `type` values are GoTrue's own: `signup`, `recovery`, and `email_change` for
+ * BOTH halves of a double-confirmed change (old address and new).
+ */
+async function verificationLinksFor(
+  address: string,
+  type: "signup" | "recovery" | "email_change",
+  expected: number,
+): Promise<URL[]> {
+  let links: URL[] = [];
+
+  for (let attempt = 0; attempt < 24; attempt++) {
+    // Deduplicated on the normalized href, because each message repeats its link
+    // in the plain-text AND html parts and both are searched.
+    const byHref = new Map<string, URL>();
+
+    for (const body of await mailBodiesFor(address)) {
+      for (const candidate of body.match(/https?:\/\/[^\s"'<>]+/g) ?? []) {
+        if (!candidate.includes("token") && !candidate.includes("code=")) {
+          continue;
+        }
+        const href = candidate.replace(/&amp;/g, "&");
+        if (!byHref.has(href)) byHref.set(href, new URL(href));
+      }
+    }
+
+    links = [...byHref.values()].filter(
+      (link) => link.searchParams.get("type") === type,
+    );
+
+    if (links.length >= expected) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  // Counted, not merely non-empty: "at least one" would let a mail carrying NO
+  // link pass on the strength of its sibling, which is exactly what the
+  // two-confirmation case has to rule out.
   expect(
     links.length,
-    `expected ${expected} distinct verification link(s) across ${bodies.length} captured mail(s)`,
+    `expected ${expected} distinct '${type}' link(s) mailed to ${address}`,
   ).toBe(expected);
+
   return links;
 }
 
@@ -230,12 +276,21 @@ test.describe("Auth email redirects (needs a live LOCAL Supabase stack)", () => 
     "no local Supabase stack with a mail catcher — run `supabase start` first",
   );
 
-  // The mailbox is shared state and both tests assert on its contents, so they
-  // must not interleave. Everything else in the suite still runs in parallel.
-  test.describe.configure({ mode: "serial" });
-
   test.afterAll(() => {
     deleteFixtureAccounts(registered.splice(0));
+  });
+
+  test("the signup confirmation returns to this deployment", async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(120_000);
+
+    const email = registerEmail("signup");
+    await registerLocally(page, email);
+
+    const links = await verificationLinksFor(email, "signup", 1);
+    expectRedirectsTo(links, `${baseURL}/auth/callback`);
   });
 
   test("the recovery link returns to this deployment and reaches the form", async ({
@@ -247,11 +302,13 @@ test.describe("Auth email redirects (needs a live LOCAL Supabase stack)", () => 
 
     const email = registerEmail("recovery");
     await registerLocally(page, email);
+    // Recovery is only meaningful for an address that can sign in, and an
+    // unconfirmed one cannot.
+    confirmEmail(email);
 
     // Registration may leave a session, and an authenticated visitor has no
     // business on /forgot-password. Start the recovery as a stranger would.
     await context.clearCookies();
-    await clearMailbox();
 
     await page.goto("/forgot-password");
     // Fail with the URL we actually reached rather than a bare locator timeout.
@@ -263,7 +320,7 @@ test.describe("Auth email redirects (needs a live LOCAL Supabase stack)", () => 
     await page.fill("#recovery-email", email);
     await page.click('button[type="submit"]');
 
-    const links = verificationLinksIn(await waitForMails(1), 1);
+    const links = await verificationLinksFor(email, "recovery", 1);
     expectRedirectsTo(links, `${baseURL}/auth/reset-password`);
 
     // Following it must land on the real form. Compare the pathname EXACTLY: a
@@ -292,17 +349,13 @@ test.describe("Auth email redirects (needs a live LOCAL Supabase stack)", () => 
 
     const email = registerEmail("changemail");
     await registerLocally(page, email);
+    // No session until the address is confirmed, and /app/settings needs one.
+    confirmEmail(email);
 
-    // Registering already leaves a session while enable_confirmations is off,
-    // and middleware bounces an authenticated visitor off /login. Drop it and
-    // sign in deliberately, so the session under test is one this spec created
-    // rather than a side effect whose existence depends on that setting.
+    // Drop whatever registering left, so the session under test is one this
+    // spec created deliberately rather than a side effect of a config setting.
     await context.clearCookies();
     await logIn(page, email);
-
-    // Clear AFTER logging in, so nothing registration or login produced can be
-    // mistaken for a change-confirmation.
-    await clearMailbox();
 
     await page.goto("/app/settings/security/change-email");
     await page.fill("#change-email-new", `next.${email}`);
@@ -311,7 +364,7 @@ test.describe("Auth email redirects (needs a live LOCAL Supabase stack)", () => 
     // double_confirm_changes sends one to the OLD address and one to the NEW.
     // BOTH carry the redirect and both have to come back here — a half-fixed
     // flow would strand whoever happened to click the other one.
-    const links = verificationLinksIn(await waitForMails(2), 2);
+    const links = await verificationLinksFor(email, "email_change", 2);
     expectRedirectsTo(links, `${baseURL}/auth/callback`);
   });
 });

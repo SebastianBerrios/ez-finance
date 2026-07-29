@@ -234,7 +234,28 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+#
+# ON, and this is a security setting, not a preference. With it OFF, Supabase
+# answers a duplicate signup with `user_already_exists` while a fresh address
+# gets a session — so the register form, which is written to be non-enumerating
+# and always says "check your inbox", leaks which addresses are taken. With it ON
+# Supabase obfuscates the duplicate and silently re-sends instead. classify() now
+# also folds the duplicate codes into ConflictOrRejected so the app does not
+# depend on this toggle alone, but the toggle is where the leak actually closes.
+#
+# It also matters more here than in a normal project: mvp-lab is ONE auth.users
+# pool shared with the other fleet apps, so an unverified address is a row every
+# app inherits.
+#
+# The app is built for this: register.action.ts redirects to /check-email and the
+# adapter comments already assume confirmations are on. Locally the mail lands in
+# Mailpit (see [local_smtp], port 54334) so there is nothing to configure.
+#
+# HOSTED: keeping this on in production needs real SMTP. The built-in sender is
+# rate-limited to a couple of messages an hour ([auth.rate_limit] email_sent
+# mirrors it) and restricted in whom it will deliver to, so signup would stall at
+# "check your inbox" with no inbox. Wire Resend before publishing.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.

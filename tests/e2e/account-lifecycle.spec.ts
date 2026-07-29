@@ -20,7 +20,7 @@
 import { execFileSync } from "node:child_process";
 
 import { unzipSync, strFromU8 } from "fflate";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 // The URL the APP UNDER TEST is wired to — the one playwright.config.ts put in
 // the web server's environment — not some parallel variable the app never
@@ -89,6 +89,29 @@ function assertRegisteredLocally(email: string): void {
     Number(found),
     `"${email}" is not in the local container: the app under test is NOT wired to ${APP_SUPABASE_URL}`,
   ).toBe(1);
+}
+
+/**
+ * Mark the address confirmed, the way clicking the emailed link would, and sign
+ * in. [auth] enable_confirmations is ON — it closes an enumeration oracle on the
+ * register form, see supabase/config.toml — so a fresh signup holds NO session
+ * and every page under /app would bounce to /login without this.
+ *
+ * Only email_confirmed_at is written: auth.users.confirmed_at is a GENERATED
+ * column and assigning to it errors. The real emailed link is exercised by
+ * tests/e2e/auth-email-redirects.spec, which is where that belongs.
+ */
+async function confirmAndSignIn(page: Page, email: string): Promise<void> {
+  sql(
+    `update auth.users set email_confirmed_at = now() where email = '${email}'`,
+  );
+
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.getByLabel(/correo electrónico/i).fill(email);
+  await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+  await page.getByRole("button", { name: /^ingresar/i }).click();
+  await page.waitForURL(/\/app/);
 }
 
 /** Make the pending deletion request of `email` due right now. */
@@ -172,11 +195,14 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     const confirmField = page.getByLabel(/confirm/i);
     if (await confirmField.count()) await confirmField.first().fill(PASSWORD);
     await page.getByRole("button", { name: /crear cuenta/i }).click();
-    // The app routes to /check-email by design; the session already exists.
+    // The app routes to /check-email by design, and with confirmations on that
+    // is also where the session ISN'T yet.
     await page.waitForURL(/\/app|\/check-email/);
 
     // The signup landed in the LOCAL container, so everything below is safe.
     assertRegisteredLocally(email);
+
+    await confirmAndSignIn(page, email);
 
     // --- deep link straight into settings, never having visited /app --------
     // The (app) layout must bootstrap the profile here, otherwise every read on
@@ -275,6 +301,8 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     await page.waitForURL(/\/app|\/check-email/);
 
     assertRegisteredLocally(email);
+
+    await confirmAndSignIn(page, email);
 
     await page.goto("/app/settings/account");
     await expect(
