@@ -255,10 +255,15 @@ double_confirm_changes = true
 # throughput — it is WHO the default sender will talk to. Supabase Auth "will
 # refuse to deliver messages to addresses that are not part of the project's
 # team" until custom SMTP is configured, so for anyone outside the org signup
-# stalls at "check your inbox" with no inbox and no error. Wire Resend before
-# publishing (dashboard: Authentication > Emails > SMTP Settings). Once custom
-# SMTP is on, the default auth-email rate limit is 30 new users per hour, tunable
-# under Auth > Rate Limits.
+# stalls at "check your inbox" with no inbox and no error. Wire an SMTP provider
+# before publishing (dashboard: Authentication > Emails > SMTP Settings). Once
+# custom SMTP is on, the default auth-email rate limit is 30 new users per hour,
+# tunable under Auth > Rate Limits.
+#
+# Choosing one: without a domain of your own, pick a provider that verifies a
+# single SENDER ADDRESS rather than a domain. Resend needs a verified domain and
+# its resend.dev fallback only delivers to your own account address — the same
+# dead end as no SMTP. See the README for the current options.
 #
 # The [auth.rate_limit] email_sent value below governs THIS LOCAL STACK only; do
 # not read it as the hosted inbuilt-SMTP limit, which Supabase does not publish

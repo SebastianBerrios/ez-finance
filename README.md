@@ -64,9 +64,19 @@ skipped — no build error, no runtime error, just users stuck. Do them in order
 required (`enable_confirmations`, see `supabase/config.toml` for why), and until
 custom SMTP is configured Supabase Auth _"will refuse to deliver messages to
 addresses that are not part of the project's team"_. Every outside signup stalls
-at "check your inbox" with no inbox. Configure under
-**Authentication → Emails → SMTP Settings**; afterwards the default auth-email
-limit is 30 new users/hour, tunable under **Auth → Rate Limits**.
+at "check your inbox" with no inbox. Password recovery and email change go the
+same way — they mail unconditionally, so without SMTP they silently do nothing.
+Configure under **Authentication → Emails → SMTP Settings**; afterwards the
+default auth-email limit is 30 new users/hour, tunable under
+**Auth → Rate Limits**.
+
+> **Pick a provider that verifies a single SENDER, not a whole domain**, unless
+> you own a domain. Resend requires a verified domain — its `resend.dev` fallback
+> only delivers to your own account address, which is the same dead end as having
+> no SMTP at all. Brevo's free tier verifies one address (300/day) and SendGrid's
+> does too (100/day). Without domain authentication expect some mail to land in
+> spam: fine for a demo, not for real customers — which is the point at which the
+> app should be graduating to its own project anyway.
 
 **2. The deployment URL in the redirect allow-list.** Every auth email is built
 from the _request_ origin, because the shared project's Site URL belongs to no app
