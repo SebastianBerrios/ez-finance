@@ -251,10 +251,18 @@ double_confirm_changes = true
 # adapter comments already assume confirmations are on. Locally the mail lands in
 # Mailpit (see [local_smtp], port 54334) so there is nothing to configure.
 #
-# HOSTED: keeping this on in production needs real SMTP. The built-in sender is
-# rate-limited to a couple of messages an hour ([auth.rate_limit] email_sent
-# mirrors it) and restricted in whom it will deliver to, so signup would stall at
-# "check your inbox" with no inbox. Wire Resend before publishing.
+# HOSTED: keeping this on in production needs real SMTP, and the blocker is not
+# throughput — it is WHO the default sender will talk to. Supabase Auth "will
+# refuse to deliver messages to addresses that are not part of the project's
+# team" until custom SMTP is configured, so for anyone outside the org signup
+# stalls at "check your inbox" with no inbox and no error. Wire Resend before
+# publishing (dashboard: Authentication > Emails > SMTP Settings). Once custom
+# SMTP is on, the default auth-email rate limit is 30 new users per hour, tunable
+# under Auth > Rate Limits.
+#
+# The [auth.rate_limit] email_sent value below governs THIS LOCAL STACK only; do
+# not read it as the hosted inbuilt-SMTP limit, which Supabase does not publish
+# as a fixed number.
 enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
