@@ -40,7 +40,11 @@ export function MoneyDisplay({
   const { currency, exponent, minorUnits } = toParts(amount);
   // display-only float: domain never does this arithmetic
   const value = Number(minorUnits) / 10 ** exponent;
-  const formatted = new Intl.NumberFormat(locale ?? "es-ES", {
+  // es-PE, not es-ES: the product operates in soles, and the two locales disagree
+  // on both things that matter here. es-ES renders PEN as "1500,50 PEN" — comma
+  // decimals and a bare currency code; es-PE renders "S/ 1,500.50", which is what
+  // a Peruvian reader expects. Overridable per call for anyone who needs otherwise.
+  const formatted = new Intl.NumberFormat(locale ?? "es-PE", {
     style: "currency",
     currency,
   }).format(value);

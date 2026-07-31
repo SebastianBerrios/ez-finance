@@ -215,5 +215,110 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        where  u.email = '${email}' and c.archived_at is null`,
     );
     expect(Number(stillActive), "the other ten were kept").toBe(10);
+
+    // --- and the dashboard COMPUTES from it --------------------------------
+    // The whole point of the wizard: what it stored is what the engine reads.
+    // 3500.00 split 60/25/15 with nothing spent yet, in soles.
+    await expect(
+      page.getByRole("heading", { name: /tu presupuesto/i }),
+    ).toBeVisible();
+
+    for (const label of [/necesidades/i, /deseos/i, /ahorro/i]) {
+      await expect(page.getByRole("heading", { name: label })).toBeVisible();
+    }
+
+    // THE CARDS SHOW *THIS PERSON'S* SPLIT, 60/25/15 — not the 50/30/20 default.
+    // Added after re-reading the page and finding the shares hardcoded there: the
+    // amounts were already correct, so nothing else in this test could have caught
+    // labels that quietly contradicted them.
+    await expect(page.getByText("60%")).toBeVisible();
+    await expect(page.getByText("25%")).toBeVisible();
+    await expect(page.getByText("15%")).toBeVisible();
+    await expect(page.getByText("50%")).toHaveCount(0);
+
+    // EVERY figure reads zero, and that is the engine obeying the income mode this
+    // wizard run chose — not an empty dashboard.
+    //
+    // Step 4 selected "real", which counts only income ALREADY RECEIVED. No income
+    // transaction exists yet, so the effective income is 0 and all three targets
+    // are 0 with it. The form says as much next to the option ("a inicio de mes
+    // verás todo en 0 %"), and asserting it here is what proves the choice
+    // travelled from the radio button through the database into computeBudget. An
+    // expectation of S/ 3,500.00 would have been asserting the DEFAULT mode's
+    // behaviour while the test had deliberately picked another.
+    //
+    // Matched by REGEX because Intl separates the symbol from the digits with
+    // U+00A0: "S/ 0.00" typed with an ordinary space does not match what renders.
+    await expect(page.getByText(/S\/\s*0\.00/).first()).toBeVisible();
+
+    // Zero income yields 0 %, never a blank or a NaN — the engine's documented
+    // guard for a month with no money in it.
+    const bars = page.getByRole("progressbar");
+    await expect(bars).toHaveCount(3);
+    for (let index = 0; index < 3; index++) {
+      await expect(bars.nth(index)).toHaveAttribute("aria-valuenow", "0");
+    }
+
+    // And the stored expected income IS the 3500 that was typed — the zeroes above
+    // are the mode's doing, not lost data.
+    const storedIncome = sql(
+      `select c.expected_income || '|' || c.income_mode
+       from   ez_finance.budget_configs c
+       join   ez_finance.workspace_members m on m.workspace_id = c.workspace_id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}'`,
+    );
+    expect(storedIncome).toBe("350000|real");
+
+    // --- recording money MOVES the buckets ---------------------------------
+    // Everything above proves setup stored what it claimed. This proves the loop
+    // closes: under mode "real" the dashboard only comes alive once income is
+    // actually recorded, which is the behaviour the form promised.
+    await page.getByRole("link", { name: /registrar movimiento/i }).click();
+    await page.waitForURL(/\/app\/movimientos\/nuevo/);
+
+    // An income of 1000 — the denominator the buckets are measured against.
+    // The radio itself is sr-only, so it is not a clickable target — the visible
+    // control is its label, which is what a person actually presses.
+    await page.locator('label[for="kind-income"]').click();
+    await page.fill("#tx-amount", "1000");
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    // 60 % of 1000 for needs, 15 % for savings — the person's own split applied to
+    // income that now exists.
+    await expect(page.getByText(/S\/\s*600\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*150\.00/).first()).toBeVisible();
+
+    // Now an expense against a NEEDS category, which must consume that bucket.
+    await page.getByRole("link", { name: /registrar movimiento/i }).click();
+    await page.waitForURL(/\/app\/movimientos\/nuevo/);
+    await page.fill("#tx-amount", "150.50");
+    // The option text carries the bucket after the name, so the label must match
+    // what is rendered rather than just the category name.
+    await page.selectOption("#tx-category", {
+      label: "Supermercado · Necesidad",
+    });
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    // 600.00 - 150.50 left in needs, and the bar has moved off zero.
+    await expect(page.getByText(/S\/\s*449\.50/).first()).toBeVisible();
+
+    const needsBar = page.getByRole("progressbar").first();
+    await expect(needsBar).not.toHaveAttribute("aria-valuenow", "0");
+
+    // The expense landed as ONE row, positive, with its category — the sign lives
+    // in `kind`, never in the number.
+    const recorded = sql(
+      `select t.kind || '|' || t.base_amount || '|' || t.entered_currency
+              || '|' || t.exchange_rate || '|' || coalesce(c.name, 'none')
+       from   ez_finance.transactions t
+       left join ez_finance.categories c on c.id = t.category_id
+       join   ez_finance.workspace_members m on m.workspace_id = t.workspace_id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and t.kind = 'expense'`,
+    );
+    expect(recorded).toBe("expense|15050|PEN|1.0000000000|Supermercado");
   });
 });
