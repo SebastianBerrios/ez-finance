@@ -1,0 +1,15 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only ez_finance's own migrations.
+-- ez_finance does not own or maintain it. See mvp-lab-infra/OPERATIONS.md §4
+-- and D:\Programming\Frontend\CLAUDE.md.
+--
+-- Upstream (fast-route): moves fast_route's JWT claims off the TOP LEVEL of the
+-- fleet-global `app_metadata` blob and under `app_metadata -> 'fast_route'`,
+-- behind three helper functions instead of 25 hand-copied policy expressions.
+--
+-- WHY EMPTY IS SAFE HERE: it rewrites fast_route policies and rewrites
+-- raw_app_meta_data for fast_route's own members only. ez_finance owns no
+-- top-level claim and touches no other app's namespace — the same workspace rule,
+-- honoured from the start rather than retrofitted.

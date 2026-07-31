@@ -1,0 +1,13 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only ez_finance's own migrations.
+-- ez_finance does not own or maintain it. See mvp-lab-infra/OPERATIONS.md §4
+-- and D:\Programming\Frontend\CLAUDE.md.
+--
+-- Upstream (fast-route): grants `authenticated` execute on the claim helper
+-- functions introduced by 20260727180519, so fast_route's own RLS policies can
+-- call them.
+--
+-- WHY EMPTY IS SAFE HERE: the grants target functions in fast_route_private,
+-- which does not exist in a local reset of this repo.
