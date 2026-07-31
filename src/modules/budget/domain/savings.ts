@@ -18,6 +18,11 @@ import type { Classified } from "./transfer-classifier";
  * Both are already in baseCurrency (same currency guaranteed by orchestrator).
  * Returns Money (never Result — inputs pre-validated).
  */
-export function computeSavings(classified: Classified, _baseCurrency: CurrencyCode): Money {
-  return expectOk(add(classified.expenseByBucket.save, classified.transferSavingsInflow));
+export function computeSavings(
+  classified: Classified,
+  _baseCurrency: CurrencyCode,
+): Money {
+  return expectOk(
+    add(classified.expenseByBucket.save, classified.transferSavingsInflow),
+  );
 }

@@ -3,7 +3,11 @@
 // §5.6 rules 1–4 fully covered.
 
 import { describe, expect, it } from "vitest";
-import type { BudgetConfig, MonthlySnapshot, SnapshotTransaction } from "@shared/domain/budget-types";
+import type {
+  BudgetConfig,
+  MonthlySnapshot,
+  SnapshotTransaction,
+} from "@shared/domain/budget-types";
 import { fromMinorUnits, equals } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 import { resolveIncome } from "./income-resolver";
@@ -67,7 +71,7 @@ describe("resolveIncome — mode: real", () => {
   it("returns sum of income transactions", () => {
     const snapshot = makeSnapshot([
       incomeTx("t1", 100000n), // $1000
-      incomeTx("t2", 50000n),  // $500
+      incomeTx("t2", 50000n), // $500
     ]);
     const config = makeConfig("real", 200000n);
     const result = resolveIncome(snapshot, config);
@@ -143,9 +147,7 @@ describe("resolveIncome — mode: mayor", () => {
 
   it("§5.6 rule 2: uses realIncome when real > expected (bonus month)", () => {
     // real = 1200, expected = 1000 → mayor = 1200
-    const snapshot = makeSnapshot([
-      incomeTx("t1", 120000n),
-    ]);
+    const snapshot = makeSnapshot([incomeTx("t1", 120000n)]);
     const config = makeConfig("mayor", 100000n);
     const result = resolveIncome(snapshot, config);
     expect(equals(result, usd(120000n))).toBe(true);

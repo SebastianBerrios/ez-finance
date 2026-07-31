@@ -17,7 +17,9 @@ import { Result, ok, err } from "@shared/domain/result";
  *
  * Returns Result<void, ConfigError> — ok(undefined) on success.
  */
-export function validateConfig(config: BudgetConfig): Result<void, ConfigError> {
+export function validateConfig(
+  config: BudgetConfig,
+): Result<void, ConfigError> {
   const { need, want, save } = config.percentages;
 
   // Guard 1: negative percentage (checked first, per spec)
@@ -31,7 +33,11 @@ export function validateConfig(config: BudgetConfig): Result<void, ConfigError> 
 
   // Guard 2: percentages must be whole numbers (design contract: integers summing to 100).
   // Fractional values would be silently Math.round-ed downstream, distorting targets.
-  if (!Number.isInteger(need) || !Number.isInteger(want) || !Number.isInteger(save)) {
+  if (
+    !Number.isInteger(need) ||
+    !Number.isInteger(want) ||
+    !Number.isInteger(save)
+  ) {
     return err<ConfigError>({
       kind: "ConfigError",
       reason: "percentage-not-integer",

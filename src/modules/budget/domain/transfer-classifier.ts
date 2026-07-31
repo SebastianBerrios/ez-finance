@@ -88,9 +88,8 @@ export function classify(snapshot: MonthlySnapshot): Classified {
         const bucket = categoryBucket.get(tx.categoryId)!;
         // Add to per-category map
         const prev = expenseByCategory.get(tx.categoryId);
-        const updated = prev !== undefined
-          ? expectOk(add(prev, tx.amount))
-          : tx.amount;
+        const updated =
+          prev !== undefined ? expectOk(add(prev, tx.amount)) : tx.amount;
         expenseByCategory.set(tx.categoryId, updated);
 
         // Add to bucket aggregate (null bucket = unbucketed, skip bucket total)
@@ -140,7 +139,9 @@ export function classify(snapshot: MonthlySnapshot): Classified {
     // Transfer matrix
     if (!outIsSavings && inIsSavings) {
       // operational → savings: count OUT leg in transferSavingsInflow
-      transferSavingsInflow = expectOk(add(transferSavingsInflow, outLeg.amount));
+      transferSavingsInflow = expectOk(
+        add(transferSavingsInflow, outLeg.amount),
+      );
     }
     // All other cells (op→op, sav→sav, sav→op): neutral — no bucket consumed
   }

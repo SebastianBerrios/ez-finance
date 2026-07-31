@@ -180,7 +180,10 @@ describe("classify — expense by bucket", () => {
 
   it("accumulates multiple expenses in the same bucket", () => {
     const snapshot = makeSnapshot(
-      [expenseTx("e1", 30000n, "cat-need"), expenseTx("e2", 20000n, "cat-need")],
+      [
+        expenseTx("e1", 30000n, "cat-need"),
+        expenseTx("e2", 20000n, "cat-need"),
+      ],
       [needCategory("cat-need")],
       [opAccount("acc-op-1")],
     );
@@ -195,7 +198,11 @@ describe("classify — expense by bucket", () => {
         expenseTx("e2", 30000n, "cat-want"),
         expenseTx("e3", 20000n, "cat-save"),
       ],
-      [needCategory("cat-need"), wantCategory("cat-want"), saveCategory("cat-save")],
+      [
+        needCategory("cat-need"),
+        wantCategory("cat-want"),
+        saveCategory("cat-save"),
+      ],
       [opAccount("acc-op-1")],
     );
     const result = classify(snapshot);
@@ -285,7 +292,9 @@ describe("classify — transfer matrix", () => {
   // Cell 1: operational → savings (§5.6 rule 6) — OUT-leg amount consumed as SAVE
   it("§5.6 rule 6: operational→savings counts OUT leg in transferSavingsInflow", () => {
     const [out, inLeg] = transferPair(
-      "t-out", "t-in", "transfer-1",
+      "t-out",
+      "t-in",
+      "transfer-1",
       20000n, // 200 USD outgoing
       "acc-bank",
       "acc-savings",
@@ -304,7 +313,9 @@ describe("classify — transfer matrix", () => {
   // Cell 2: operational → operational (§5.6 rule 5) — neutral
   it("§5.6 rule 5: operational→operational is neutral (no bucket consumed)", () => {
     const [out, inLeg] = transferPair(
-      "t-out", "t-in", "transfer-1",
+      "t-out",
+      "t-in",
+      "transfer-1",
       50000n,
       "acc-bank-1",
       "acc-bank-2",
@@ -324,7 +335,9 @@ describe("classify — transfer matrix", () => {
   // Cell 3: savings → savings (§5.6 rule 7) — neutral
   it("§5.6 rule 7: savings→savings is neutral (internal reorganization)", () => {
     const [out, inLeg] = transferPair(
-      "t-out", "t-in", "transfer-1",
+      "t-out",
+      "t-in",
+      "transfer-1",
       50000n,
       "acc-sav-1",
       "acc-sav-2",
@@ -342,7 +355,9 @@ describe("classify — transfer matrix", () => {
   // Cell 4: savings → operational (§5.6 rule 8) — neutral (dis-saving not reversed)
   it("§5.6 rule 8: savings→operational is neutral (withdrawal not reversed)", () => {
     const [out, inLeg] = transferPair(
-      "t-out", "t-in", "transfer-1",
+      "t-out",
+      "t-in",
+      "transfer-1",
       30000n,
       "acc-savings",
       "acc-bank",
@@ -359,8 +374,22 @@ describe("classify — transfer matrix", () => {
 
   // Multiple operational→savings transfers accumulate
   it("accumulates multiple operational→savings transfers", () => {
-    const [out1, in1] = transferPair("t1-out", "t1-in", "tf-1", 20000n, "acc-bank", "acc-sav");
-    const [out2, in2] = transferPair("t2-out", "t2-in", "tf-2", 15000n, "acc-bank", "acc-sav");
+    const [out1, in1] = transferPair(
+      "t1-out",
+      "t1-in",
+      "tf-1",
+      20000n,
+      "acc-bank",
+      "acc-sav",
+    );
+    const [out2, in2] = transferPair(
+      "t2-out",
+      "t2-in",
+      "tf-2",
+      15000n,
+      "acc-bank",
+      "acc-sav",
+    );
     const snapshot = makeSnapshot(
       [out1, in1, out2, in2],
       [],
@@ -381,11 +410,7 @@ describe("classify — transfer matrix", () => {
       transferId: "tf-orphan",
       transferLeg: "out",
     };
-    const snapshot = makeSnapshot(
-      [orphan],
-      [],
-      [opAccount("acc-bank")],
-    );
+    const snapshot = makeSnapshot([orphan], [], [opAccount("acc-bank")]);
     const result = classify(snapshot);
     expect(equals(result.transferSavingsInflow, zeroUsd())).toBe(true);
   });
@@ -422,7 +447,9 @@ describe("classify — transfer matrix", () => {
   // Transfer pair where account is not found in snapshot.accounts map → ignored
   it("ignores transfer pair where outLeg account is missing from accounts list", () => {
     const [out, inLeg] = transferPair(
-      "t-out", "t-in", "tf-missing-acc",
+      "t-out",
+      "t-in",
+      "tf-missing-acc",
       20000n,
       "acc-missing", // not present in snapshot accounts
       "acc-savings",

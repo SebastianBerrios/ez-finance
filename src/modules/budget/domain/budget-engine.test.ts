@@ -63,11 +63,29 @@ function makeConfig(overrides?: Partial<BudgetConfig>): BudgetConfig {
 }
 
 function incomeTransaction(amount: bigint): SnapshotTransaction {
-  return { id: "income-1", kind: "income", amount: usd(amount), date: "2024-01-15", accountId: "bank-1" };
+  return {
+    id: "income-1",
+    kind: "income",
+    amount: usd(amount),
+    date: "2024-01-15",
+    accountId: "bank-1",
+  };
 }
 
-function expenseTransaction(id: string, amount: bigint, categoryId: string, accountId = "bank-1"): SnapshotTransaction {
-  return { id, kind: "expense", amount: usd(amount), date: "2024-01-15", accountId, categoryId };
+function expenseTransaction(
+  id: string,
+  amount: bigint,
+  categoryId: string,
+  accountId = "bank-1",
+): SnapshotTransaction {
+  return {
+    id,
+    kind: "expense",
+    amount: usd(amount),
+    date: "2024-01-15",
+    accountId,
+    categoryId,
+  };
 }
 
 function transferPair(
@@ -109,7 +127,10 @@ describe("§5.6 rule 1/2 — income mode: mayor", () => {
   it("rule 1: uses expectedIncome when real < expected (start of month)", () => {
     // real = $0, expected = $1000 → effective = $1000
     const snapshot = makeSnapshot([]);
-    const config = makeConfig({ incomeMode: "mayor", expectedIncome: usd(100000n) });
+    const config = makeConfig({
+      incomeMode: "mayor",
+      expectedIncome: usd(100000n),
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
@@ -120,7 +141,10 @@ describe("§5.6 rule 1/2 — income mode: mayor", () => {
   it("rule 2: uses realIncome when real > expected (bonus month)", () => {
     // real = $1200, expected = $1000 → effective = $1200
     const snapshot = makeSnapshot([incomeTransaction(120000n)]); // $1200
-    const config = makeConfig({ incomeMode: "mayor", expectedIncome: usd(100000n) });
+    const config = makeConfig({
+      incomeMode: "mayor",
+      expectedIncome: usd(100000n),
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
@@ -160,7 +184,10 @@ describe("§5.6 rule 4 — income mode: esperado", () => {
   it("always uses expectedIncome regardless of real income", () => {
     // real = $5000, expected = $1000 → effective = $1000 (esperado always wins)
     const snapshot = makeSnapshot([incomeTransaction(500000n)]); // $5000 real
-    const config = makeConfig({ incomeMode: "esperado", expectedIncome: usd(100000n) });
+    const config = makeConfig({
+      incomeMode: "esperado",
+      expectedIncome: usd(100000n),
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
@@ -197,7 +224,10 @@ describe("§5.6 rule 6 — transfer: operational → savings, consumes save buck
       ...transferPair("bank-1", "savings-1", 20000n), // op→savings
     ];
     const snapshot = makeSnapshot(transactions);
-    const config = makeConfig({ incomeMode: "real", percentages: { need: 50, want: 30, save: 20 } });
+    const config = makeConfig({
+      incomeMode: "real",
+      percentages: { need: 50, want: 30, save: 20 },
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
@@ -272,7 +302,11 @@ describe("§5.6 rule 9 — savings: additive (save-bucket expenses + transfer in
 
 describe("§5.6 rule 10 — archived category still counts", () => {
   it("includes expenses from archived categories in their bucket", () => {
-    const archivedCat: SnapshotCategory = { id: "archived-need", bucket: "need", archived: true };
+    const archivedCat: SnapshotCategory = {
+      id: "archived-need",
+      bucket: "need",
+      archived: true,
+    };
     const categories = [...BASE_CATEGORIES, archivedCat];
     const transactions = [
       incomeTransaction(100000n),
@@ -349,7 +383,9 @@ describe("§5.6 rule 12 — zero income: all 0%, no NaN, Result.ok", () => {
 describe("§5.6 rule 13 — percentages not summing to 100 → ConfigError", () => {
   it("returns Result.err(ConfigError, percentages-not-100) when sum !== 100", () => {
     const snapshot = makeSnapshot([]);
-    const config = makeConfig({ percentages: { need: 50, want: 30, save: 25 } }); // sum = 105
+    const config = makeConfig({
+      percentages: { need: 50, want: 30, save: 25 },
+    }); // sum = 105
 
     const result = computeBudget(snapshot, config);
 
@@ -368,7 +404,9 @@ describe("§5.6 rule 13 — percentages not summing to 100 → ConfigError", () 
 describe("§5.6 rule 14 — negative percentage → ConfigError", () => {
   it("returns Result.err(ConfigError, percentage-negative) for negative bucket", () => {
     const snapshot = makeSnapshot([]);
-    const config = makeConfig({ percentages: { need: 60, want: 60, save: -20 } });
+    const config = makeConfig({
+      percentages: { need: 60, want: 60, save: -20 },
+    });
 
     const result = computeBudget(snapshot, config);
 
@@ -392,11 +430,16 @@ describe("§5.6 rules 15/16 — alert thresholds", () => {
       expenseTransaction("need-exp", 80000n, "cat-need"),
     ];
     const snapshot = makeSnapshot(transactions);
-    const config = makeConfig({ incomeMode: "real", nearLimitThresholdPct: 80 });
+    const config = makeConfig({
+      incomeMode: "real",
+      nearLimitThresholdPct: 80,
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
-    const needAlert = result.alerts.find((a) => a.scope === "bucket" && a.bucket === "need");
+    const needAlert = result.alerts.find(
+      (a) => a.scope === "bucket" && a.bucket === "need",
+    );
     expect(needAlert).toBeDefined();
     expect(needAlert?.level).toBe("near");
   });
@@ -412,7 +455,9 @@ describe("§5.6 rules 15/16 — alert thresholds", () => {
 
     const result = expectOk(computeBudget(snapshot, config));
 
-    const needAlert = result.alerts.find((a) => a.scope === "bucket" && a.bucket === "need");
+    const needAlert = result.alerts.find(
+      (a) => a.scope === "bucket" && a.bucket === "need",
+    );
     expect(needAlert).toBeDefined();
     expect(needAlert?.level).toBe("over");
   });
@@ -424,12 +469,19 @@ describe("§5.6 rules 15/16 — alert thresholds", () => {
       expenseTransaction("need-exp", 100000n, "cat-need"),
     ];
     const snapshot = makeSnapshot(transactions);
-    const config = makeConfig({ incomeMode: "real", nearLimitThresholdPct: 80 });
+    const config = makeConfig({
+      incomeMode: "real",
+      nearLimitThresholdPct: 80,
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
-    const overAlerts = result.alerts.filter((a) => a.bucket === "need" && a.level === "over");
-    const nearAlerts = result.alerts.filter((a) => a.bucket === "need" && a.level === "near");
+    const overAlerts = result.alerts.filter(
+      (a) => a.bucket === "need" && a.level === "over",
+    );
+    const nearAlerts = result.alerts.filter(
+      (a) => a.bucket === "need" && a.level === "near",
+    );
     expect(overAlerts).toHaveLength(0);
     expect(nearAlerts).toHaveLength(1);
   });
@@ -441,12 +493,19 @@ describe("§5.6 rules 15/16 — alert thresholds", () => {
       expenseTransaction("need-exp", 101000n, "cat-need"),
     ];
     const snapshot = makeSnapshot(transactions);
-    const config = makeConfig({ incomeMode: "real", nearLimitThresholdPct: 80 });
+    const config = makeConfig({
+      incomeMode: "real",
+      nearLimitThresholdPct: 80,
+    });
 
     const result = expectOk(computeBudget(snapshot, config));
 
-    const overAlerts = result.alerts.filter((a) => a.bucket === "need" && a.level === "over");
-    const nearAlerts = result.alerts.filter((a) => a.bucket === "need" && a.level === "near");
+    const overAlerts = result.alerts.filter(
+      (a) => a.bucket === "need" && a.level === "over",
+    );
+    const nearAlerts = result.alerts.filter(
+      (a) => a.bucket === "need" && a.level === "near",
+    );
     expect(overAlerts).toHaveLength(1);
     expect(nearAlerts).toHaveLength(0);
   });
@@ -460,7 +519,7 @@ describe("§5.6 rules 15/16 — alert thresholds", () => {
 describe("BudgetResult: globalAvailable", () => {
   it("globalAvailable = income - sum(all bucket consumed amounts)", () => {
     const transactions = [
-      incomeTransaction(100000n),                         // $1000 income
+      incomeTransaction(100000n), // $1000 income
       expenseTransaction("need-exp", 40000n, "cat-need"), // $400 need
       expenseTransaction("want-exp", 20000n, "cat-want"), // $200 want
       expenseTransaction("save-exp", 10000n, "cat-save"), // $100 save
@@ -477,7 +536,7 @@ describe("BudgetResult: globalAvailable", () => {
 
   it("globalAvailable can be negative when total consumed exceeds income", () => {
     const transactions = [
-      incomeTransaction(100000n),                          // $1000 income
+      incomeTransaction(100000n), // $1000 income
       expenseTransaction("need-exp", 120000n, "cat-need"), // $1200 need (over budget!)
     ];
     const snapshot = makeSnapshot(transactions);

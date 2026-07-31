@@ -1,7 +1,10 @@
 // income-resolver.ts — pure domain: resolve effective income from snapshot + config
 // exactOptionalPropertyTypes + noUncheckedIndexedAccess are ON
 
-import type { BudgetConfig, MonthlySnapshot } from "@shared/domain/budget-types";
+import type {
+  BudgetConfig,
+  MonthlySnapshot,
+} from "@shared/domain/budget-types";
 import type { Money } from "@shared/domain/money";
 import { zero, add, compare } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
@@ -17,15 +20,15 @@ import { expectOk } from "@shared/domain/result";
  * All amounts assumed same currency (orchestrator validates before calling).
  * Returns Money — never a Result (inputs pre-validated by orchestrator).
  */
-export function resolveIncome(snapshot: MonthlySnapshot, config: BudgetConfig): Money {
+export function resolveIncome(
+  snapshot: MonthlySnapshot,
+  config: BudgetConfig,
+): Money {
   // Compute realIncome = sum of income-kind transactions
   const seed = expectOk(zero(snapshot.baseCurrency));
   const realIncome = snapshot.transactions
     .filter((tx) => tx.kind === "income")
-    .reduce<Money>(
-      (acc, tx) => expectOk(add(acc, tx.amount)),
-      seed,
-    );
+    .reduce<Money>((acc, tx) => expectOk(add(acc, tx.amount)), seed);
 
   switch (config.incomeMode) {
     case "real":

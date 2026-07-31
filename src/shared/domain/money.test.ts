@@ -50,6 +50,10 @@ describe("isSupportedCurrency", () => {
     expect(isSupportedCurrency("KWD")).toBe(true);
   });
 
+  it("returns true for PEN — the product's operating currency", () => {
+    expect(isSupportedCurrency("PEN")).toBe(true);
+  });
+
   it("returns false for unknown currency", () => {
     expect(isSupportedCurrency("UNKNOWN")).toBe(false);
     expect(isSupportedCurrency("")).toBe(false);
@@ -69,6 +73,10 @@ describe("exponentOf", () => {
   it("returns 3 for KWD", () => {
     const kwd = expectOk(fromMinorUnits("KWD", 1000n));
     expect(exponentOf(kwd.currency)).toBe(3);
+  });
+  it("returns 2 for PEN — céntimos", () => {
+    const pen = expectOk(fromMinorUnits("PEN", 100n));
+    expect(exponentOf(pen.currency)).toBe(2);
   });
 });
 
@@ -539,9 +547,9 @@ describe("Money immutability", () => {
 const arbCurrency = fc.constantFrom("EUR", "USD", "JPY", "KWD", "GBP");
 const arbMinorUnits = fc.bigInt({ min: -1_000_000n, max: 1_000_000n });
 
-const arbMoney = fc.tuple(arbCurrency, arbMinorUnits).map(([cur, units]) =>
-  expectOk(fromMinorUnits(cur, units)),
-);
+const arbMoney = fc
+  .tuple(arbCurrency, arbMinorUnits)
+  .map(([cur, units]) => expectOk(fromMinorUnits(cur, units)));
 
 const arbSameCurrencyPair = arbCurrency.chain((cur) =>
   fc.tuple(
