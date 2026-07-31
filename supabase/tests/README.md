@@ -151,3 +151,32 @@ anon, ...`. Access is decided by RLS alone, so the suite asserts anon reaches no
   `public.rls_managed_schemas`, but the `ensure_rls` event trigger that reads it
   lives in `mvp-lab-infra` and is not part of this repo's migrations, so
   `db reset` never creates it.
+
+## transactions.sql
+
+Covers `20260728174500_ez_finance_transactions.sql` — the Fase 5 table, its tied
+transfer pair, and `workspaces.base_currency`. 28 checks, `ALL CHECKS PASSED`.
+
+Its fixtures use a different UUID range from `accounts_categories.sql`, so **both
+suites run back-to-back after a single reset** — verified, 30 + 28.
+
+What it pins that a schema read cannot tell you:
+
+- **A workspace starts with NO base currency and the first account sets it.** The
+  column is nullable on purpose: every transaction freezes a converted
+  `base_amount`, so the base currency cannot change once transactions exist, and
+  guessing it at bootstrap would hand the person an immutable wrong value. A
+  workspace with no accounts cannot hold a transaction, so it needs no currency.
+  Both the adoption and the immutability are asserted, plus the refusal to write a
+  transaction before either happened.
+- **A transfer only ever exists as a pair.** RLS refuses a direct
+  `kind = 'transfer'` insert — a single leg is a broken pair and no row-level
+  policy can require its sibling — so `record_transfer()` writes both in one
+  statement and `delete_transfer()` removes both. A third leg is blocked by a
+  partial unique index on `(transfer_id, transfer_leg)`.
+- **"Transacciones propias" is literal.** Not even the owner can edit or delete a
+  member's movement. Since a denied UPDATE/DELETE affects zero rows rather than
+  raising, those checks assert the surviving state instead of expecting an error.
+- **`record_transfer()` re-checks membership itself.** It is SECURITY DEFINER in
+  order to bypass the `kind <> 'transfer'` guard, which also means it bypasses
+  RLS — so an observer is rejected inside the function, not by a policy.
