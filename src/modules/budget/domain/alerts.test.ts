@@ -81,14 +81,24 @@ describe("generateAlerts — bucket alerts", () => {
     const result = makeResultBuckets(80, 0, 0);
     const alerts = generateAlerts(result, makeClassified(), makeConfig());
     expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ scope: "bucket", level: "near", bucket: "need", consumedPct: 80 });
+    expect(alerts[0]).toMatchObject({
+      scope: "bucket",
+      level: "near",
+      bucket: "need",
+      consumedPct: 80,
+    });
   });
 
   it("emits near-limit alert when consumedPct is above threshold but below 100 (85%)", () => {
     const result = makeResultBuckets(85, 0, 0);
     const alerts = generateAlerts(result, makeClassified(), makeConfig());
     expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ scope: "bucket", level: "near", bucket: "need", consumedPct: 85 });
+    expect(alerts[0]).toMatchObject({
+      scope: "bucket",
+      level: "near",
+      bucket: "need",
+      consumedPct: 85,
+    });
   });
 
   it("emits near-limit alert at exactly 100% (not over — LOCKED EDGE CASE)", () => {
@@ -101,7 +111,12 @@ describe("generateAlerts — bucket alerts", () => {
 
     expect(overAlerts).toHaveLength(0); // NO over-limit at exactly 100
     expect(nearAlerts).toHaveLength(1); // exactly one near-limit
-    expect(nearAlerts[0]).toMatchObject({ scope: "bucket", level: "near", bucket: "need", consumedPct: 100 });
+    expect(nearAlerts[0]).toMatchObject({
+      scope: "bucket",
+      level: "near",
+      bucket: "need",
+      consumedPct: 100,
+    });
   });
 
   // ------------------------------------------------------------------
@@ -114,19 +129,30 @@ describe("generateAlerts — bucket alerts", () => {
     const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
     const overAlerts = alerts.filter((a) => a.level === "over");
-    const nearAlerts = alerts.filter((a) => a.level === "near" && a.bucket === "need");
+    const nearAlerts = alerts.filter(
+      (a) => a.level === "near" && a.bucket === "need",
+    );
 
     expect(overAlerts).toHaveLength(1);
     expect(nearAlerts).toHaveLength(0); // NO near-limit when over
-    expect(overAlerts[0]).toMatchObject({ scope: "bucket", level: "over", bucket: "need", consumedPct: 110 });
+    expect(overAlerts[0]).toMatchObject({
+      scope: "bucket",
+      level: "over",
+      bucket: "need",
+      consumedPct: 110,
+    });
   });
 
   it("emits over-limit alert for 101%", () => {
     const result = makeResultBuckets(101, 0, 0);
     const alerts = generateAlerts(result, makeClassified(), makeConfig());
 
-    expect(alerts.some((a) => a.level === "over" && a.bucket === "need")).toBe(true);
-    expect(alerts.some((a) => a.level === "near" && a.bucket === "need")).toBe(false);
+    expect(alerts.some((a) => a.level === "over" && a.bucket === "need")).toBe(
+      true,
+    );
+    expect(alerts.some((a) => a.level === "near" && a.bucket === "need")).toBe(
+      false,
+    );
   });
 
   // ------------------------------------------------------------------
@@ -223,10 +249,16 @@ describe("generateAlerts — category alerts", () => {
     const result = makeResultBuckets(50, 0, 0); // below bucket threshold
 
     const alerts = generateAlerts(result, classified, config);
-    const catAlert = alerts.find((a) => a.scope === "category" && a.categoryId === "cat-1");
+    const catAlert = alerts.find(
+      (a) => a.scope === "category" && a.categoryId === "cat-1",
+    );
 
     expect(catAlert).toBeDefined();
-    expect(catAlert).toMatchObject({ scope: "category", level: "near", categoryId: "cat-1" });
+    expect(catAlert).toMatchObject({
+      scope: "category",
+      level: "near",
+      categoryId: "cat-1",
+    });
   });
 
   it("emits over-limit category alert when expenses exceed the category limit", () => {
@@ -244,10 +276,16 @@ describe("generateAlerts — category alerts", () => {
     const result = makeResultBuckets(0, 0, 0);
 
     const alerts = generateAlerts(result, classified, config);
-    const catAlert = alerts.find((a) => a.scope === "category" && a.categoryId === "cat-1");
+    const catAlert = alerts.find(
+      (a) => a.scope === "category" && a.categoryId === "cat-1",
+    );
 
     expect(catAlert).toBeDefined();
-    expect(catAlert).toMatchObject({ scope: "category", level: "over", categoryId: "cat-1" });
+    expect(catAlert).toMatchObject({
+      scope: "category",
+      level: "over",
+      categoryId: "cat-1",
+    });
   });
 
   it("emits no category alert when expenses are below threshold of the category limit", () => {

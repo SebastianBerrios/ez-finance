@@ -1,7 +1,12 @@
 // alerts.ts — pure domain: generate budget alerts from bucket and category data
 // exactOptionalPropertyTypes + noUncheckedIndexedAccess are ON
 
-import type { Alert, BudgetConfig, BudgetResult, Bucket } from "@shared/domain/budget-types";
+import type {
+  Alert,
+  BudgetConfig,
+  BudgetResult,
+  Bucket,
+} from "@shared/domain/budget-types";
 import { isZero } from "@shared/domain/money";
 import type { Classified } from "./transfer-classifier";
 
@@ -52,7 +57,10 @@ export function generateAlerts(
   // Category-level alerts (optional; only when categoryLimits is configured)
   // ------------------------------------------------------------------
 
-  if (config.categoryLimits === undefined || config.categoryLimits.length === 0) {
+  if (
+    config.categoryLimits === undefined ||
+    config.categoryLimits.length === 0
+  ) {
     return alerts;
   }
 
@@ -66,9 +74,19 @@ export function generateAlerts(
     const pct = (Number(consumed.minorUnits) * 100) / Number(limit.minorUnits);
 
     if (pct > 100) {
-      alerts.push({ scope: "category", level: "over", categoryId, consumedPct: pct });
+      alerts.push({
+        scope: "category",
+        level: "over",
+        categoryId,
+        consumedPct: pct,
+      });
     } else if (pct >= threshold) {
-      alerts.push({ scope: "category", level: "near", categoryId, consumedPct: pct });
+      alerts.push({
+        scope: "category",
+        level: "near",
+        categoryId,
+        consumedPct: pct,
+      });
     }
   }
 

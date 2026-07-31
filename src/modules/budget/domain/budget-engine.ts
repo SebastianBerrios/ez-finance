@@ -1,7 +1,12 @@
 // budget-engine.ts — pure domain: computeBudget orchestrator
 // exactOptionalPropertyTypes + noUncheckedIndexedAccess are ON
 
-import type { BudgetConfig, BudgetResult, ConfigError, MonthlySnapshot } from "@shared/domain/budget-types";
+import type {
+  BudgetConfig,
+  BudgetResult,
+  ConfigError,
+  MonthlySnapshot,
+} from "@shared/domain/budget-types";
 import type { Money } from "@shared/domain/money";
 import { add, subtract } from "@shared/domain/money";
 import { Result, err, expectOk, ok } from "@shared/domain/result";
@@ -84,9 +89,21 @@ export function computeBudget(
 
   // Step 6: compute per-bucket results
   // Note: the save bucket's consumed = savingsAmount (INCLUDES transfer inflow, per REQ-E-14)
-  const needBucket = computeBucket(income, config.percentages.need, classified.expenseByBucket.need);
-  const wantBucket = computeBucket(income, config.percentages.want, classified.expenseByBucket.want);
-  const saveBucket = computeBucket(income, config.percentages.save, savingsAmount);
+  const needBucket = computeBucket(
+    income,
+    config.percentages.need,
+    classified.expenseByBucket.need,
+  );
+  const wantBucket = computeBucket(
+    income,
+    config.percentages.want,
+    classified.expenseByBucket.want,
+  );
+  const saveBucket = computeBucket(
+    income,
+    config.percentages.save,
+    savingsAmount,
+  );
 
   const buckets = { need: needBucket, want: wantBucket, save: saveBucket };
 

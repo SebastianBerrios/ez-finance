@@ -3,7 +3,12 @@
 
 import type { BucketResult } from "@shared/domain/budget-types";
 import type { Money } from "@shared/domain/money";
-import { isZero, makeRate, multiplyByRate, subtract } from "@shared/domain/money";
+import {
+  isZero,
+  makeRate,
+  multiplyByRate,
+  subtract,
+} from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 
 /**
@@ -20,7 +25,11 @@ import { expectOk } from "@shared/domain/result";
  *   consumedPct = (consumed.minorUnits / income.minorUnits) * 100
  *   This means a single bucket can show > 100% if spending exceeds income.
  */
-export function computeBucket(income: Money, pct: number, consumed: Money): BucketResult {
+export function computeBucket(
+  income: Money,
+  pct: number,
+  consumed: Money,
+): BucketResult {
   // Compute target = income * (pct / 100) via half-even multiplyByRate
   const rate = expectOk(makeRate(BigInt(Math.round(pct)), 100n));
   const targetAmount = multiplyByRate(income, rate);
