@@ -23,6 +23,12 @@ build/
 .env*.local
 .env.local
 
+# The Supabase CLI substitutes config.toml env() values from a plain `.env` at
+# the repo root, and nowhere else — so that file holds real provider secrets
+# (Google OAuth client secret) and must never be committed. This pattern matches
+# only ".env" exactly, so the committed .env.example template is unaffected.
+.env
+
 # vercel
 .vercel
 

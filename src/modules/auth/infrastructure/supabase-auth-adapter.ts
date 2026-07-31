@@ -12,14 +12,37 @@ import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { type Email } from "@/modules/auth/domain/email";
 import { type Password } from "@/modules/auth/domain/password";
 import { type Result, err, ok } from "@/shared/domain/result";
+import { getRequestOrigin } from "@/shared/infrastructure/http/origin";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 
 import { mapSupabaseError } from "./error-map";
+
+// Where each transactional email has to land. Built from the origin of the
+// request that triggered the mail, never from the Supabase project's Site URL:
+// mvp-lab is ONE project shared by the fleet, so that Site URL is a single
+// default belonging to no app in particular. See getRequestOrigin().
+//
+// Both paths below are route handlers excluded from the middleware matcher —
+// they have to be reachable without a session, because the code exchange IS
+// the authentication.
+const CALLBACK_PATH = "/auth/callback";
+const RECOVERY_PATH = "/auth/reset-password";
 
 export class SupabaseAuthAdapter implements AuthPort {
   // ---------------------------------------------------------------------------
   // register — non-enumerating: existing-email returns ok (obfuscated by Supabase
   // when enable_confirmations=true) so the UI always shows "check your inbox".
+  //
+  // Non-enumerating in TWO respects, and the second one is easy to miss. The
+  // visible response is identical because register.action always redirects to
+  // /check-email. But when enable_confirmations is OFF, signUp also hands back a
+  // SESSION for a new address and none for one that already exists — so being
+  // logged in afterwards is itself the answer, readable by anyone who then loads
+  // /app. The session is discarded below.
+  //
+  // Confirmations are on (supabase/config.toml), which makes that discard a
+  // no-op locally — it is here for the hosted project, whose setting this repo
+  // does not control, and for the day someone turns it off.
   // ---------------------------------------------------------------------------
   async register(
     email: Email,
@@ -27,9 +50,11 @@ export class SupabaseAuthAdapter implements AuthPort {
   ): Promise<Result<void, AuthError>> {
     try {
       const supabase = await createServerClient();
-      const { error } = await supabase.auth.signUp({
+      const origin = await getRequestOrigin();
+      const { data, error } = await supabase.auth.signUp({
         email: email.value,
         password: password.value(),
+        options: { emailRedirectTo: `${origin}${CALLBACK_PATH}` },
       });
 
       // When email confirmations are enabled Supabase returns no error for an
@@ -44,6 +69,23 @@ export class SupabaseAuthAdapter implements AuthPort {
           return ok(undefined);
         }
         return err(mapped);
+      }
+
+      // Drop the session rather than leave it as the tell described above.
+      // Through the port with an explicit scope, like changePassword: "local"
+      // only. The fleet shares one auth.users row, so signing this person out of
+      // fast_route and oasis is not a registration's business.
+      if (data?.session) {
+        const dropped = await this.logout("local");
+        if (!dropped.ok) {
+          // Failing the registration here would be a lie — the account exists.
+          // But a surviving session silently restores the enumeration tell, so
+          // it cannot pass unnoticed either.
+          console.error(
+            "[auth/register] discarding the signup session failed:",
+            dropped.error,
+          );
+        }
       }
 
       return ok(undefined);
@@ -118,12 +160,19 @@ export class SupabaseAuthAdapter implements AuthPort {
 
   // ---------------------------------------------------------------------------
   // requestPasswordRecovery — ALWAYS returns ok (non-enumeration)
+  //
+  // This one sends a link whether or not signup confirmations are enabled, so
+  // an explicit redirectTo is not optional: without it the recovery mail points
+  // at the shared Site URL and the user never reaches ez finance's form.
   // ---------------------------------------------------------------------------
   async requestPasswordRecovery(email: Email): Promise<Result<void, AuthError>> {
     try {
       const supabase = await createServerClient();
+      const origin = await getRequestOrigin();
       // Swallow errors intentionally — response is always generic ok
-      await supabase.auth.resetPasswordForEmail(email.value);
+      await supabase.auth.resetPasswordForEmail(email.value, {
+        redirectTo: `${origin}${RECOVERY_PATH}`,
+      });
       return ok(undefined);
     } catch {
       // Swallow all errors — never reveal whether account exists
@@ -182,13 +231,19 @@ export class SupabaseAuthAdapter implements AuthPort {
 
   // ---------------------------------------------------------------------------
   // changeEmail — triggers double_confirm_changes natively
+  //
+  // Like recovery, this mails a link unconditionally, so it needs an explicit
+  // redirect too. double_confirm_changes sends one to the OLD address and one
+  // to the new; both carry this same redirect.
   // ---------------------------------------------------------------------------
   async changeEmail(next: Email): Promise<Result<void, AuthError>> {
     try {
       const supabase = await createServerClient();
-      const { error } = await supabase.auth.updateUser({
-        email: next.value,
-      });
+      const origin = await getRequestOrigin();
+      const { error } = await supabase.auth.updateUser(
+        { email: next.value },
+        { emailRedirectTo: `${origin}${CALLBACK_PATH}` },
+      );
 
       if (error) return err(mapSupabaseError(error));
       return ok(undefined);

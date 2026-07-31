@@ -160,7 +160,18 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# The app builds every auth redirect from the REQUEST origin (see
+# src/shared/infrastructure/http/origin.ts), so whatever host serves the app has
+# to be listed here or Supabase rejects the redirect. Locally that is
+# localhost:3000 (what `next dev` and playwright's baseURL use) and the 127.0.0.1
+# equivalent. The previous value was "https://127.0.0.1:3000" — https on
+# loopback, which nothing ever sends, and it omitted localhost entirely.
+# The REMOTE mvp-lab project keeps its own allow-list in the dashboard
+# (Auth > URL Configuration); this block only configures the local stack.
+additional_redirect_urls = [
+  "http://localhost:3000/**",
+  "http://127.0.0.1:3000/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -223,7 +234,41 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+#
+# ON, and this is a security setting, not a preference. With it OFF, Supabase
+# answers a duplicate signup with `user_already_exists` while a fresh address
+# gets a session — so the register form, which is written to be non-enumerating
+# and always says "check your inbox", leaks which addresses are taken. With it ON
+# Supabase obfuscates the duplicate and silently re-sends instead. classify() now
+# also folds the duplicate codes into ConflictOrRejected so the app does not
+# depend on this toggle alone, but the toggle is where the leak actually closes.
+#
+# It also matters more here than in a normal project: mvp-lab is ONE auth.users
+# pool shared with the other fleet apps, so an unverified address is a row every
+# app inherits.
+#
+# The app is built for this: register.action.ts redirects to /check-email and the
+# adapter comments already assume confirmations are on. Locally the mail lands in
+# Mailpit (see [local_smtp], port 54334) so there is nothing to configure.
+#
+# HOSTED: keeping this on in production needs real SMTP, and the blocker is not
+# throughput — it is WHO the default sender will talk to. Supabase Auth "will
+# refuse to deliver messages to addresses that are not part of the project's
+# team" until custom SMTP is configured, so for anyone outside the org signup
+# stalls at "check your inbox" with no inbox and no error. Wire an SMTP provider
+# before publishing (dashboard: Authentication > Emails > SMTP Settings). Once
+# custom SMTP is on, the default auth-email rate limit is 30 new users per hour,
+# tunable under Auth > Rate Limits.
+#
+# Choosing one: without a domain of your own, pick a provider that verifies a
+# single SENDER ADDRESS rather than a domain. Resend needs a verified domain and
+# its resend.dev fallback only delivers to your own account address — the same
+# dead end as no SMTP. See the README for the current options.
+#
+# The [auth.rate_limit] email_sent value below governs THIS LOCAL STACK only; do
+# not read it as the hosted inbuilt-SMTP limit, which Supabase does not publish
+# as a fixed number.
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -337,13 +382,19 @@ email_optional = false
 # Google OAuth provider — slice 2b
 # Requires provisioning:
 #   1. Google Cloud Console: create an OAuth 2.0 Client ID (Web application type)
-#      and add https://vzxrsvqnxkoiuwvdozxv.supabase.co/auth/v1/callback as an
-#      authorized redirect URI (for the hosted/remote project).
+#      and add BOTH callbacks as authorized redirect URIs:
+#        https://vzxrsvqnxkoiuwvdozxv.supabase.co/auth/v1/callback   hosted/remote
+#        http://127.0.0.1:54331/auth/v1/callback                     local stack
+#      The local one uses the [api] port set at the top of this file (54331), NOT
+#      the CLI's default 54321. Miss it and Google rejects the local flow only.
 #   2. Supabase dashboard (mvp-lab project): Auth > Providers > Google > enable,
 #      paste the Client ID and Secret from step 1.
 #   3. Auth > URL Configuration: add the app's site URL and redirect URLs.
-#   For local development: set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and
-#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET in .env.local (see .env.example).
+#   For local development: put SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID and
+#   SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET in a plain `.env` at the REPO ROOT.
+#   That is the ONLY file the CLI substitutes env() from — not `.env.local`
+#   (the CLI never reads it) and not `supabase/functions/.env` (Edge Functions
+#   only). Changes here need `supabase stop && supabase start` to take effect.
 [auth.external.google]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"

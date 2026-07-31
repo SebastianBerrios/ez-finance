@@ -94,12 +94,21 @@ export function classify(rawCode: string): AuthError {
   // Benign conflict / rejection — checked BEFORE validation so a compound
   // "validation_failed: email_exists" resolves to conflict, not InvalidEmail.
   // same_password is a benign rejection, NOT a re-auth requirement.
+  // "already_exists" / "already_registered" carry no "email" token, so they are
+  // listed in their own right: `user_already_exists` is the code Supabase
+  // actually returns for a duplicate signup, and letting it fall through to
+  // Unavailable turned the register form into an enumeration oracle (a taken
+  // address got an error, a fresh one got /check-email). Matching on the
+  // "already" pair rather than the full code also covers the user_/email_
+  // spellings without enumerating every one Supabase has used.
   if (
     hasAnyCode(tokens, [
       "email_exists",
       "email_taken",
       "conflict",
       "same_password",
+      "already_exists",
+      "already_registered",
     ])
   ) {
     return { kind: "ConflictOrRejected" };

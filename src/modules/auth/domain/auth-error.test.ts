@@ -110,6 +110,19 @@ describe("AuthError", () => {
       expect(classify("email_exists").kind).toBe("ConflictOrRejected");
     });
 
+    // The code Supabase ACTUALLY returns for a duplicate signup is
+    // `user_already_exists` — it says "user", not "email", so it matched none of
+    // the conflict codes and fell through to Unavailable. register() only
+    // swallows ConflictOrRejected, so the form answered a taken address with an
+    // error while a fresh one redirected to /check-email: an enumeration oracle
+    // in the one flow that is written to be non-enumerating.
+    it.each([
+      "user_already_exists",
+      "user_already_registered",
+    ])("maps '%s' to ConflictOrRejected (duplicate signup must not be an oracle)", (code) => {
+      expect(classify(code).kind).toBe("ConflictOrRejected");
+    });
+
     it("maps 'email_taken' to ConflictOrRejected", () => {
       expect(classify("email_taken").kind).toBe("ConflictOrRejected");
     });
