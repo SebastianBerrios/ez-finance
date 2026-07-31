@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+
+import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { readOnboardingStatus } from "@/modules/onboarding/infrastructure/onboarding-status";
 
 export const metadata: Metadata = {
   title: "Configuración inicial — ez finance",
@@ -12,7 +16,18 @@ export const metadata: Metadata = {
  * against total spending. Someone expecting "what share of my spending was
  * needs?" reads the dashboard as broken. Said once, up front, it costs one screen.
  */
-export default function OnboardingWelcomePage() {
+export default async function OnboardingWelcomePage() {
+  // Only the ROOT turns a configured workspace away. The sub-steps must stay
+  // reachable even once the config exists, because the income step writes one and
+  // the split step comes after it — see the note in layout.tsx.
+  const entry = await bootstrapUserWorkspace();
+  if (entry.ok && entry.value.kind === "READY") {
+    const status = await readOnboardingStatus(entry.value.workspaceId);
+    if (status.complete) {
+      redirect("/app");
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col">
       <p className="text-muted-foreground text-sm">Paso 1 de 5</p>
