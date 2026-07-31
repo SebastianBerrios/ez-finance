@@ -269,5 +269,56 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        where  u.email = '${email}'`,
     );
     expect(storedIncome).toBe("350000|real");
+
+    // --- recording money MOVES the buckets ---------------------------------
+    // Everything above proves setup stored what it claimed. This proves the loop
+    // closes: under mode "real" the dashboard only comes alive once income is
+    // actually recorded, which is the behaviour the form promised.
+    await page.getByRole("link", { name: /registrar movimiento/i }).click();
+    await page.waitForURL(/\/app\/movimientos\/nuevo/);
+
+    // An income of 1000 — the denominator the buckets are measured against.
+    // The radio itself is sr-only, so it is not a clickable target — the visible
+    // control is its label, which is what a person actually presses.
+    await page.locator('label[for="kind-income"]').click();
+    await page.fill("#tx-amount", "1000");
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    // 60 % of 1000 for needs, 15 % for savings — the person's own split applied to
+    // income that now exists.
+    await expect(page.getByText(/S\/\s*600\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*150\.00/).first()).toBeVisible();
+
+    // Now an expense against a NEEDS category, which must consume that bucket.
+    await page.getByRole("link", { name: /registrar movimiento/i }).click();
+    await page.waitForURL(/\/app\/movimientos\/nuevo/);
+    await page.fill("#tx-amount", "150.50");
+    // The option text carries the bucket after the name, so the label must match
+    // what is rendered rather than just the category name.
+    await page.selectOption("#tx-category", {
+      label: "Supermercado · Necesidad",
+    });
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    // 600.00 - 150.50 left in needs, and the bar has moved off zero.
+    await expect(page.getByText(/S\/\s*449\.50/).first()).toBeVisible();
+
+    const needsBar = page.getByRole("progressbar").first();
+    await expect(needsBar).not.toHaveAttribute("aria-valuenow", "0");
+
+    // The expense landed as ONE row, positive, with its category — the sign lives
+    // in `kind`, never in the number.
+    const recorded = sql(
+      `select t.kind || '|' || t.base_amount || '|' || t.entered_currency
+              || '|' || t.exchange_rate || '|' || coalesce(c.name, 'none')
+       from   ez_finance.transactions t
+       left join ez_finance.categories c on c.id = t.category_id
+       join   ez_finance.workspace_members m on m.workspace_id = t.workspace_id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and t.kind = 'expense'`,
+    );
+    expect(recorded).toBe("expense|15050|PEN|1.0000000000|Supermercado");
   });
 });

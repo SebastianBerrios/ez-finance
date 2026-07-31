@@ -153,9 +153,21 @@ export default async function AppPage() {
           </>
         )}
 
+        {/*
+          The primary action, and placed after the numbers on purpose: the person
+          reads where they stand, then records. Recording is also the ONLY way any
+          of the figures above ever move.
+        */}
+        <Link
+          href="/app/movimientos/nuevo"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 mt-2 flex items-center justify-center rounded-xl px-5 py-4 text-sm font-medium transition-colors"
+        >
+          Registrar movimiento
+        </Link>
+
         <Link
           href="/app/settings"
-          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 mt-2 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
+          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
         >
           <span className="text-sm font-medium">Configuración</span>
           <span className="text-sm">›</span>
