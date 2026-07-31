@@ -2,14 +2,31 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logoutAction } from "@/app/(app)/actions/logout.action";
+import type { AccountWithBalance } from "@/modules/accounts/application/ports/account-port";
+import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { LogoutButton } from "@/modules/auth/ui/components/logout-button";
 import { getMonthlyBudget } from "@/modules/budget/application/get-monthly-budget";
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { SupabaseMonthlySnapshotAdapter } from "@/modules/budget/infrastructure/supabase-monthly-snapshot-adapter";
 import { BucketCard } from "@/modules/budget/ui/components/bucket-card";
+import { type Money, fromMinorUnits } from "@shared/domain/money";
+import { expectOk } from "@shared/domain/result";
 import { MoneyDisplay } from "@shared/ui/money-display";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
+
+/**
+ * A balance as Money, for MoneyDisplay.
+ *
+ * fromMinorUnits validates the currency and can fail, but the code came out of a
+ * column the app only ever writes from the supported set — a failure here means the
+ * database holds something no app path produced, so zero is shown rather than
+ * crashing the whole dashboard over one row.
+ */
+function accountMoney(account: AccountWithBalance): Money {
+  const money = fromMinorUnits(account.currency, account.balanceMinorUnits);
+  return money.ok ? money.value : expectOk(fromMinorUnits("PEN", 0n));
+}
 
 const MONTH_NAMES = [
   "enero",
@@ -42,6 +59,10 @@ export default async function AppPage() {
   }
 
   const now = new Date();
+
+  const accounts = await new SupabaseAccountAdapter().listWithBalances(
+    entry.value.workspaceId,
+  );
 
   const budget = await getMonthlyBudget(
     { workspaceId: entry.value.workspaceId, month: now },
@@ -151,6 +172,43 @@ export default async function AppPage() {
               </section>
             )}
           </>
+        )}
+
+        {accounts.ok && accounts.value.length > 0 && (
+          <section className="bg-card border-border rounded-xl border p-5">
+            <h2 className="text-muted-foreground text-xs tracking-widest uppercase">
+              Tus cuentas
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2">
+              {/*
+                Archived accounts are shown, marked. Their money still exists, and a
+                balance that vanished on archive would be a lie — but they are
+                labelled so the list does not look like it has duplicates.
+              */}
+              {accounts.value.map((account) => (
+                <li
+                  key={account.id}
+                  className="flex items-baseline justify-between gap-3"
+                >
+                  <span className="text-foreground text-sm">
+                    {account.name}
+                    {account.archived && (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        archivada
+                      </span>
+                    )}
+                  </span>
+                  <MoneyDisplay
+                    amount={accountMoney(account)}
+                    size="sm"
+                    variant={
+                      account.balanceMinorUnits < 0n ? "expense" : "neutral"
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {/*
