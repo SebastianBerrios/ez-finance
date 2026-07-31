@@ -12,7 +12,7 @@ export default function RegisterPage() {
   return (
     <>
       <h2 className="text-foreground mb-6 text-center text-xl font-semibold">
-        Creá tu cuenta
+        Crea tu cuenta
       </h2>
 
       {/* Google OAuth — requires Google provider configured in Supabase dashboard */}

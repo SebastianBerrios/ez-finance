@@ -20,7 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <>
       <h2 className="text-foreground mb-6 text-center text-xl font-semibold">
-        Ingresá a tu cuenta
+        Ingresa a tu cuenta
       </h2>
 
       {deletion === "requested" && (
@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           className="bg-muted mb-4 rounded-lg px-4 py-3 text-sm"
         >
           Programamos la eliminación de tu cuenta y cerramos la sesión en este
-          dispositivo. Tenés 30 días para volver a ingresar y cancelarla desde
+          dispositivo. Tienes 30 días para volver a ingresar y cancelarla desde
           Configuración → Datos y cuenta.
         </div>
       )}
@@ -43,7 +43,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         >
           Venció el plazo de 30 días y eliminamos tus datos de ez finance: tu
           perfil y tus espacios personales ya no existen. Tu cuenta de acceso
-          sigue disponible para otras aplicaciones, y si ingresás de nuevo vas a
+          sigue disponible para otras aplicaciones, y si ingresas de nuevo vas a
           empezar desde cero.
         </div>
       )}

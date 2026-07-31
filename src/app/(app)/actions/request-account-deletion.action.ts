@@ -29,7 +29,7 @@ export async function requestAccountDeletionAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+    return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
 
   const confirmation = (formData.get("confirm") as string | null) ?? "";
@@ -40,14 +40,17 @@ export async function requestAccountDeletionAction(
   const deletion = new SupabaseDeletionAdapter();
   const auth = new SupabaseAuthAdapter();
 
-  const result = await requestAccountDeletion({ userId: user.id }, { deletion, auth });
+  const result = await requestAccountDeletion(
+    { userId: user.id },
+    { deletion, auth },
+  );
 
   if (!result.ok) {
     if (result.error.kind === "ConflictOrRejected") {
       return { error: "Ya hay una eliminación programada para esta cuenta." };
     }
     if (result.error.kind === "SessionExpired") {
-      return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+      return { error: "Sesión expirada. Por favor ingresa de nuevo." };
     }
     return { error: GENERIC_ERROR };
   }

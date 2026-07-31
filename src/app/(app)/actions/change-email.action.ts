@@ -25,7 +25,7 @@ export async function changeEmailAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+    return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
 
   const next = (formData.get("email") as string | null) ?? "";
@@ -36,7 +36,7 @@ export async function changeEmailAction(
   if (!result.ok) {
     const kind = result.error.kind;
     if (kind === "InvalidEmail") {
-      return { error: "Ingresá un correo electrónico válido." };
+      return { error: "Ingresa un correo electrónico válido." };
     }
     // ConflictOrRejected (already registered) maps to GENERIC — never reveal existence.
     return { error: GENERIC_ERROR };

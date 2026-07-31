@@ -52,7 +52,7 @@ export function DeleteAccountForm({ action }: DeleteAccountFormProps) {
       <p className="text-muted-foreground text-sm">
         Tu cuenta queda programada para eliminarse en{" "}
         <strong className="text-foreground">30 días</strong>. Durante ese plazo
-        podés volver a ingresar y cancelar la eliminación. Al vencer, borramos
+        puedes volver a ingresar y cancelar la eliminación. Al vencer, borramos
         tu perfil y tus espacios personales. Los espacios compartidos siguen
         existiendo mientras quede alguien más en ellos; si sos la{" "}
         <strong className="text-foreground">última persona</strong> de un

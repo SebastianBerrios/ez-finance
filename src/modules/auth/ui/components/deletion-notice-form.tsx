@@ -46,7 +46,7 @@ export function DeletionNoticeForm({
             ? `Venció el plazo de 30 días y el ${erasedOnLabel} borramos tu perfil y tus espacios personales.`
             : "Venció el plazo de 30 días y borramos tu perfil y tus espacios personales."}{" "}
           Tu cuenta de acceso sigue disponible para otras aplicaciones, y si
-          ingresás de nuevo vas a empezar desde cero.
+          ingresas de nuevo vas a empezar desde cero.
         </p>
       </div>
 

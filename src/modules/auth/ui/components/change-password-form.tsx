@@ -89,7 +89,7 @@ export function ChangePasswordForm({ action }: ChangePasswordFormProps) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="change-password-confirm">Confirmá la contraseña</Label>
+        <Label htmlFor="change-password-confirm">Confirma la contraseña</Label>
         <Input
           id="change-password-confirm"
           name="confirmPassword"

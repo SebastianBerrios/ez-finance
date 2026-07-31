@@ -18,9 +18,10 @@ describe("ChangePasswordForm — render and structure", () => {
 
   it("renders confirm password input with correct label", () => {
     render(<ChangePasswordForm action={vi.fn()} />);
-    expect(
-      screen.getByLabelText(/confirmá la contraseña/i),
-    ).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText(/confirma la contraseña/i)).toHaveAttribute(
+      "type",
+      "password",
+    );
   });
 
   it("renders submit button in Spanish", () => {
@@ -56,9 +57,7 @@ describe("ChangePasswordForm — client-side policy feedback", () => {
     const passwordInput = screen.getByLabelText(/nueva contraseña/i);
     await userEvent.type(passwordInput, "abc1");
     await waitFor(() => {
-      expect(
-        screen.getByText(/no cumple los requisitos/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/no cumple los requisitos/i)).toBeInTheDocument();
     });
   });
 

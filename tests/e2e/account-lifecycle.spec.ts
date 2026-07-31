@@ -82,13 +82,41 @@ function registerEmail(prefix: string): string {
  * the run stops here instead of building a whole account somewhere it must not.
  */
 function assertRegisteredLocally(email: string): void {
-  const found = sql(
-    `select count(*) from auth.users where email = '${email}'`,
-  );
+  const found = sql(`select count(*) from auth.users where email = '${email}'`);
   expect(
     Number(found),
     `"${email}" is not in the local container: the app under test is NOT wired to ${APP_SUPABASE_URL}`,
   ).toBe(1);
+}
+
+/**
+ * Give the person's Personal workspace the two things onboarding establishes: an
+ * account (which fixes the base currency) and a budget config for this month.
+ *
+ * The (app) layout gates on both — the dashboard divides by the month's income, so
+ * a half-configured workspace has nothing to render — and would otherwise redirect
+ * every test here to /onboarding. This spec is about the deletion lifecycle, not
+ * about the wizard, so it arrives configured rather than clicking through it;
+ * tests/e2e/onboarding.spec.ts is where the wizard itself belongs.
+ */
+function completeOnboarding(email: string): void {
+  const personalWorkspace = `
+    select w.id
+    from   ez_finance.workspaces        w
+    join   ez_finance.workspace_members m on m.workspace_id = w.id
+    join   auth.users                   u on u.id = m.user_id
+    where  u.email = '${email}' and w.type = 'personal' and w.deleted_at is null`;
+
+  sql(
+    `insert into ez_finance.accounts (workspace_id, name, type, currency, initial_balance)
+     select id, 'Efectivo', 'cash', 'PEN', 0 from (${personalWorkspace}) ws;
+
+     insert into ez_finance.budget_configs
+       (workspace_id, effective_from, income_mode, expected_income, pct_need, pct_want, pct_save)
+     select id, date_trunc('month', current_date)::date, 'mayor', 500000, 50, 30, 20
+     from   (${personalWorkspace}) ws
+     on conflict (workspace_id, effective_from) do nothing;`,
+  );
 }
 
 /**
@@ -109,8 +137,22 @@ async function confirmAndSignIn(page: Page, email: string): Promise<void> {
   await page.context().clearCookies();
   await page.goto("/login");
   await page.getByLabel(/correo electrónico/i).fill(email);
-  await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+  await page
+    .getByLabel(/contraseña/i)
+    .first()
+    .fill(PASSWORD);
   await page.getByRole("button", { name: /^ingresar/i }).click();
+
+  // ORDER MATTERS. The Personal workspace does not exist until bootstrap() runs,
+  // and bootstrap() runs in the (app) layout — i.e. not until this first sign-in.
+  // Configuring before this point silently inserts nothing, because the subquery
+  // that looks the workspace up finds no row.
+  //
+  // So: land wherever the gate sends us (an unconfigured workspace goes to
+  // /onboarding), configure, and only then head for /app.
+  await page.waitForURL(/\/(app|onboarding)/);
+  completeOnboarding(email);
+  await page.goto("/app");
   await page.waitForURL(/\/app/);
 }
 
@@ -191,7 +233,10 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     // --- register ----------------------------------------------------------
     await page.goto("/register");
     await page.getByLabel(/correo electrónico/i).fill(email);
-    await page.getByLabel(/^contraseña/i).first().fill(PASSWORD);
+    await page
+      .getByLabel(/^contraseña/i)
+      .first()
+      .fill(PASSWORD);
     const confirmField = page.getByLabel(/confirm/i);
     if (await confirmField.count()) await confirmField.first().fill(PASSWORD);
     await page.getByRole("button", { name: /crear cuenta/i }).click();
@@ -236,7 +281,9 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
       "perfil.json",
     ]);
 
-    const workspaces = JSON.parse(strFromU8(entries["espacios.json"] as Uint8Array));
+    const workspaces = JSON.parse(
+      strFromU8(entries["espacios.json"] as Uint8Array),
+    );
     expect(workspaces).toContainEqual(
       expect.objectContaining({ type: "personal" }),
     );
@@ -255,7 +302,10 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     // --- the account is reachable again during the grace window -------------
     await page.goto("/login");
     await page.getByLabel(/correo electrónico/i).fill(email);
-    await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+    await page
+      .getByLabel(/contraseña/i)
+      .first()
+      .fill(PASSWORD);
     await page.getByRole("button", { name: /^ingresar/i }).click();
     await page.waitForURL(/\/app/);
 
@@ -294,7 +344,10 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     // --- register + bootstrap ----------------------------------------------
     await page.goto("/register");
     await page.getByLabel(/correo electrónico/i).fill(email);
-    await page.getByLabel(/^contraseña/i).first().fill(PASSWORD);
+    await page
+      .getByLabel(/^contraseña/i)
+      .first()
+      .fill(PASSWORD);
     const confirmField = page.getByLabel(/confirm/i);
     if (await confirmField.count()) await confirmField.first().fill(PASSWORD);
     await page.getByRole("button", { name: /crear cuenta/i }).click();
@@ -327,7 +380,10 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     // --- signing back in must land on the terminal notice -------------------
     await page.goto("/login");
     await page.getByLabel(/correo electrónico/i).fill(email);
-    await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+    await page
+      .getByLabel(/contraseña/i)
+      .first()
+      .fill(PASSWORD);
     await page.getByRole("button", { name: /^ingresar/i }).click();
 
     await page.waitForURL(/\/auth\/deleted/);
@@ -354,7 +410,9 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
       .click();
 
     await page.waitForURL(/\/login\?deletion=completed/);
-    await expect(page.getByRole("status")).toContainText(/eliminamos tus datos/i);
+    await expect(page.getByRole("status")).toContainText(
+      /eliminamos tus datos/i,
+    );
 
     expect(profileCount(email)).toBe(0);
 
@@ -366,7 +424,10 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     // The notice was acknowledged, so the terminal state is over.
     await page.goto("/login");
     await page.getByLabel(/correo electrónico/i).fill(email);
-    await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+    await page
+      .getByLabel(/contraseña/i)
+      .first()
+      .fill(PASSWORD);
     await page.getByRole("button", { name: /^ingresar/i }).click();
     await page.waitForURL(/\/app/);
 

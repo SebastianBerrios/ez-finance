@@ -38,10 +38,12 @@ export function CancelDeletionForm({
         aria-live="polite"
         className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
       >
-        <p className="font-medium">Tu cuenta está programada para eliminarse.</p>
+        <p className="font-medium">
+          Tu cuenta está programada para eliminarse.
+        </p>
         <p className="mt-1">
-          Vamos a borrar tus datos el{" "}
-          <strong>{deadlineLabel}</strong>. Podés cancelar hasta esa fecha.
+          Vamos a borrar tus datos el <strong>{deadlineLabel}</strong>. Puedes
+          cancelar hasta esa fecha.
         </p>
       </div>
 

@@ -94,12 +94,12 @@ export function RegisterForm({ action }: RegisterFormProps) {
       </Button>
 
       <p className="text-muted-foreground text-center text-sm">
-        ¿Ya tenés cuenta?{" "}
+        ¿Ya tienes cuenta?{" "}
         <Link
           href="/login"
           className="text-foreground underline-offset-4 hover:underline"
         >
-          Ingresá
+          Ingresa
         </Link>
       </p>
     </form>

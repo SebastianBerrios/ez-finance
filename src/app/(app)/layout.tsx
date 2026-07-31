@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { readOnboardingStatus } from "@/modules/onboarding/infrastructure/onboarding-status";
 
 /**
  * Every /app render reads the session cookie, so there is nothing here to
@@ -43,6 +44,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     // app would be a lie. /auth/deleted shows the notice and, once the person
     // confirms, closes the session (a Server Component cannot write cookies).
     redirect("/auth/deleted");
+  } else {
+    // The dashboard divides by the month's income and buckets by category, so it
+    // needs a budget config and an account to exist at all. Rather than teach
+    // every screen to render a half-configured workspace, the wizard is a gate:
+    // finish it once and everything downstream can assume its inputs.
+    //
+    // Checked HERE and not in the middleware: this is a database read, and the
+    // middleware runs on every matched request including static navigations.
+    // Paying two queries per request to answer a question that only changes once
+    // per account is the wrong trade.
+    const status = await readOnboardingStatus(entry.value.workspaceId);
+    if (!status.complete) {
+      redirect("/onboarding");
+    }
   }
 
   return <div className="flex min-h-screen w-full flex-col">{children}</div>;

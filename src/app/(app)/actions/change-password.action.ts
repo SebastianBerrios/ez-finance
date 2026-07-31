@@ -23,7 +23,7 @@ export async function changePasswordAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+    return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
 
   const next = (formData.get("password") as string | null) ?? "";
@@ -45,7 +45,8 @@ export async function changePasswordAction(
     }
     if (kind === "ReauthRequired") {
       return {
-        error: "Por seguridad, volvé a ingresar antes de cambiar la contraseña.",
+        error:
+          "Por seguridad, vuelve a ingresar antes de cambiar la contraseña.",
       };
     }
     return { error: GENERIC_ERROR };

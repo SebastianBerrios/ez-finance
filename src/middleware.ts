@@ -16,16 +16,17 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  // Protected: /app/** requires an authenticated user
-  const isApp = path.startsWith("/app");
+  // Protected: /app/** and the onboarding wizard both require an authenticated
+  // user. /onboarding sits OUTSIDE the (app) group on purpose — that group's
+  // layout redirects an unconfigured workspace to the wizard, so hosting the
+  // wizard inside it would redirect to itself forever.
+  const isApp = path.startsWith("/app") || path.startsWith("/onboarding");
 
   // Auth pages: authenticated users should not see login/register/forgot-password.
   // /set-password is intentionally excluded: a recovery session is technically
   // "authenticated" but the user must complete password reset before using the app.
   const isAuthPage =
-    path === "/login" ||
-    path === "/register" ||
-    path === "/forgot-password";
+    path === "/login" || path === "/register" || path === "/forgot-password";
 
   if (isApp && !user) {
     return NextResponse.redirect(new URL("/login", request.url));
