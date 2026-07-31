@@ -277,4 +277,57 @@ select pg_temp.rejects(
 );
 select pg_temp.as_postgres();
 
+-- ===========================================================================
+-- 10. bootstrap() seeds a starter category set into a NEW workspace.
+--     The outsider has not been bootstrapped yet, so they are the clean subject.
+--     Everything above built its workspaces by hand precisely so these counts
+--     are not polluted by seeded rows.
+-- ===========================================================================
+select pg_temp.as_user('44444444-0000-4000-8000-000000000004');
+select ez_finance.bootstrap() as personal_workspace \gset
+select pg_temp.as_postgres();
+
+select pg_temp.check(
+  (select count(*) from ez_finance.categories where workspace_id = :'personal_workspace') = 11,
+  'bootstrap seeds 11 starter categories'
+);
+select pg_temp.check(
+  (select count(distinct bucket) from ez_finance.categories
+   where workspace_id = :'personal_workspace') = 3,
+  'the starter set covers all three buckets — an empty bucket would render as 0% forever'
+);
+select pg_temp.check(
+  (select count(*) from ez_finance.categories
+   where workspace_id = :'personal_workspace' and bucket is null) = 0,
+  'no starter category is left unbucketed'
+);
+select pg_temp.check(
+  (select count(*) from ez_finance.categories
+   where workspace_id = :'personal_workspace' and parent_id is not null) = 0,
+  'the starter set is flat — no imposed taxonomy'
+);
+select pg_temp.check(
+  (select count(*) from ez_finance.accounts where workspace_id = :'personal_workspace') = 0,
+  'NO account is seeded — its currency is immutable and would be a guess'
+);
+
+-- Idempotency: bootstrap runs on every login, so it must not re-seed. Archiving
+-- a default and calling again must not resurrect it either.
+update ez_finance.categories set archived_at = now()
+where workspace_id = :'personal_workspace' and name = 'Ocio';
+
+select pg_temp.as_user('44444444-0000-4000-8000-000000000004');
+select ez_finance.bootstrap();
+select pg_temp.as_postgres();
+
+select pg_temp.check(
+  (select count(*) from ez_finance.categories where workspace_id = :'personal_workspace') = 11,
+  'a second bootstrap does not duplicate the starter set'
+);
+select pg_temp.check(
+  (select archived_at is not null from ez_finance.categories
+   where workspace_id = :'personal_workspace' and name = 'Ocio'),
+  'nor resurrect a default the person archived'
+);
+
 do $$ begin raise notice 'ALL CHECKS PASSED'; end $$;
