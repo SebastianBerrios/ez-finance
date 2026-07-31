@@ -1,0 +1,14 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only ez_finance's own migrations.
+-- ez_finance does not own or maintain it. See mvp-lab-infra/OPERATIONS.md §4
+-- and D:\Programming\Frontend\CLAUDE.md.
+--
+-- Upstream (fast-route): a one-off data purge of fast_route tenants and profiles
+-- that the removed auth.users trigger had auto-created for users of other fleet
+-- apps — the cleanup of the leak that 20260725204305 stopped at the source.
+--
+-- WHY EMPTY IS SAFE HERE: it deletes rows inside fast_route's own schema only.
+-- A local `db reset` of this repo never creates those rows, so there is nothing
+-- to purge.

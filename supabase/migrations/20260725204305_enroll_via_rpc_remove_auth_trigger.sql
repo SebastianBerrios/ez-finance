@@ -1,0 +1,16 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only ez_finance's own migrations.
+-- ez_finance does not own or maintain it. See mvp-lab-infra/OPERATIONS.md §4
+-- and D:\Programming\Frontend\CLAUDE.md.
+--
+-- Upstream (fast-route): drops fast_route's `on_auth_user_created` trigger from
+-- the shared auth.users and replaces it with an explicit fast_route.enroll_self()
+-- RPC. That trigger had been firing on EVERY fleet signup, including ez_finance's.
+--
+-- WHY EMPTY IS SAFE HERE, and this was checked rather than assumed: no ez_finance
+-- migration ever creates that trigger — 20260724180001_ez_finance_auth_tables
+-- deliberately has none, because auth.users is shared. So there is nothing for the
+-- upstream DROP to remove under `db reset`, and stubbing it leaves the local
+-- database identical to what the remote holds for ez_finance's own objects.

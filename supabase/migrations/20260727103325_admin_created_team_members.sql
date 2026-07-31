@@ -1,0 +1,12 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the fast_route app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can
+-- reconcile the shared history and apply only ez_finance's own migrations.
+-- ez_finance does not own or maintain it. See mvp-lab-infra/OPERATIONS.md §4
+-- and D:\Programming\Frontend\CLAUDE.md.
+--
+-- Upstream (fast-route): admin-created team members — membership becomes an
+-- explicit act by an existing admin rather than anything self-service.
+--
+-- WHY EMPTY IS SAFE HERE: confined to fast_route's own schema. ez_finance models
+-- its own membership independently, in ez_finance.workspace_members.
