@@ -262,11 +262,48 @@ async function registerLocally(page: Page, email: string): Promise<void> {
     .toBe(1);
 }
 
+/**
+ * Give the Personal workspace what onboarding establishes — an account and a
+ * budget config — so the (app) layout stops redirecting to /onboarding.
+ *
+ * Only the email-change test needs it: that one has to reach a settings page. The
+ * recovery test never enters /app at all.
+ */
+function completeOnboarding(email: string): void {
+  const personalWorkspace = `
+    select w.id
+    from   ez_finance.workspaces        w
+    join   ez_finance.workspace_members m on m.workspace_id = w.id
+    join   auth.users                   u on u.id = m.user_id
+    where  u.email = '${email}' and w.type = 'personal' and w.deleted_at is null`;
+
+  sql(
+    `insert into ez_finance.accounts (workspace_id, name, type, currency, initial_balance)
+     select id, 'Efectivo', 'cash', 'PEN', 0 from (${personalWorkspace}) ws;
+
+     insert into ez_finance.budget_configs
+       (workspace_id, effective_from, income_mode, expected_income, pct_need, pct_want, pct_save)
+     select id, date_trunc('month', current_date)::date, 'mayor', 500000, 50, 30, 20
+     from   (${personalWorkspace}) ws
+     on conflict (workspace_id, effective_from) do nothing;`,
+  );
+}
+
 async function logIn(page: Page, email: string): Promise<void> {
   await page.goto("/login");
   await page.getByLabel(/correo electrónico/i).fill(email);
-  await page.getByLabel(/contraseña/i).first().fill(PASSWORD);
+  await page
+    .getByLabel(/contraseña/i)
+    .first()
+    .fill(PASSWORD);
   await page.getByRole("button", { name: /^ingresar/i }).click();
+
+  // ORDER MATTERS: the Personal workspace does not exist until bootstrap() runs
+  // in the (app) layout, i.e. not until this sign-in. Configuring any earlier
+  // silently inserts nothing, because the lookup finds no workspace.
+  await page.waitForURL(/\/(app|onboarding)/);
+  completeOnboarding(email);
+  await page.goto("/app");
   await page.waitForURL(/\/app/);
 }
 
