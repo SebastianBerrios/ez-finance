@@ -121,3 +121,33 @@ under the `scram-sha-256` rule.
 The application seam. `tests/e2e/account-lifecycle.spec.ts` drives the same
 functions through the real UI — including the terminal path, by backdating
 `ends_at` and running the batch worker against this same container.
+
+## accounts_categories.sql
+
+Covers `20260728143000_ez_finance_accounts_categories.sql` — the Fase 4 tables.
+Same invocation as `account_deletion.sql`, with `/tmp/t.sql`. Ends with
+`ALL CHECKS PASSED`.
+
+Five of its rules are PL/pgSQL triggers, which is exactly the case this directory
+exists for: account currency immutable, category bucket immutable, and three
+hierarchy rules (parent in the same workspace, one level of nesting only, no
+self-parent). It also pins the spec §4 permission split — SELECT for every role,
+writes for owner and admin only — using one fixture per role plus an outsider who
+owns a _different_ workspace, so "cannot see" tests membership rather than merely
+having nothing.
+
+Two behaviours it documents because they surprised the code that first assumed
+otherwise:
+
+- **A denied INSERT raises; a denied UPDATE does not.** RLS filters the row out
+  via `USING`, so a forbidden edit succeeds against zero rows. App code cannot
+  infer "permission denied" from an error — it has to check the affected count.
+- **`anon` holds full table grants on every table in this schema**, because the
+  onboarding migration sets `alter default privileges ... grant all on tables to
+anon, ...`. Access is decided by RLS alone, so the suite asserts anon reaches no
+  row rather than asserting on privileges. The corollary: a table shipped without
+  `enable row level security` here is readable and writable through the browser's
+  publishable key, and **nothing local prevents that** — `ez_finance` is listed in
+  `public.rls_managed_schemas`, but the `ensure_rls` event trigger that reads it
+  lives in `mvp-lab-infra` and is not part of this repo's migrations, so
+  `db reset` never creates it.
