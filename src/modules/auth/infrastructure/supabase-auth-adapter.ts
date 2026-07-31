@@ -32,6 +32,17 @@ export class SupabaseAuthAdapter implements AuthPort {
   // ---------------------------------------------------------------------------
   // register — non-enumerating: existing-email returns ok (obfuscated by Supabase
   // when enable_confirmations=true) so the UI always shows "check your inbox".
+  //
+  // Non-enumerating in TWO respects, and the second one is easy to miss. The
+  // visible response is identical because register.action always redirects to
+  // /check-email. But when enable_confirmations is OFF, signUp also hands back a
+  // SESSION for a new address and none for one that already exists — so being
+  // logged in afterwards is itself the answer, readable by anyone who then loads
+  // /app. The session is discarded below.
+  //
+  // Confirmations are on (supabase/config.toml), which makes that discard a
+  // no-op locally — it is here for the hosted project, whose setting this repo
+  // does not control, and for the day someone turns it off.
   // ---------------------------------------------------------------------------
   async register(
     email: Email,
@@ -40,7 +51,7 @@ export class SupabaseAuthAdapter implements AuthPort {
     try {
       const supabase = await createServerClient();
       const origin = await getRequestOrigin();
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.value,
         password: password.value(),
         options: { emailRedirectTo: `${origin}${CALLBACK_PATH}` },
@@ -58,6 +69,23 @@ export class SupabaseAuthAdapter implements AuthPort {
           return ok(undefined);
         }
         return err(mapped);
+      }
+
+      // Drop the session rather than leave it as the tell described above.
+      // Through the port with an explicit scope, like changePassword: "local"
+      // only. The fleet shares one auth.users row, so signing this person out of
+      // fast_route and oasis is not a registration's business.
+      if (data?.session) {
+        const dropped = await this.logout("local");
+        if (!dropped.ok) {
+          // Failing the registration here would be a lie — the account exists.
+          // But a surviving session silently restores the enumeration tell, so
+          // it cannot pass unnoticed either.
+          console.error(
+            "[auth/register] discarding the signup session failed:",
+            dropped.error,
+          );
+        }
       }
 
       return ok(undefined);

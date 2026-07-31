@@ -100,6 +100,40 @@ describe("SupabaseAuthAdapter transactional-email redirects", () => {
     );
   });
 
+  it("register discards a session signUp hands back (enumeration tell)", async () => {
+    // With enable_confirmations OFF, signUp returns a SESSION for a new address
+    // and nothing for one that already exists. register.action redirects to
+    // /check-email either way, so that session is the remaining difference an
+    // attacker can read: reaching /app afterwards proves the address was new.
+    mockSignUp.mockResolvedValue({
+      data: { session: { access_token: "tok", user: { id: "u1" } } },
+      error: null,
+    });
+
+    const result = await makeAdapter().register(
+      makeEmail("someone@example.com"),
+      makePassword("N3wPassw0rd!"),
+    );
+
+    expect(result.ok).toBe(true);
+    // "local" — never global. The fleet shares one auth.users row, so signing a
+    // person out of the other apps is not this flow's business.
+    expect(mockSignOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+
+  it("register does not sign out when signUp issued no session", async () => {
+    // The confirmations-ON path, and the already-registered path. Nothing to
+    // discard, so nothing should be revoked.
+    mockSignUp.mockResolvedValue({ data: { session: null }, error: null });
+
+    await makeAdapter().register(
+      makeEmail("someone@example.com"),
+      makePassword("N3wPassw0rd!"),
+    );
+
+    expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
   it("requestPasswordRecovery points the link at this deployment's exchange route", async () => {
     await makeAdapter().requestPasswordRecovery(makeEmail("someone@example.com"));
 
