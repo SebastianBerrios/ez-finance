@@ -24,7 +24,7 @@ export default function OnboardingWelcomePage() {
       <p className="text-muted-foreground mt-4 text-sm leading-relaxed">
         ez finance usa el método{" "}
         <strong className="text-foreground">50/30/20</strong>: repartir tu
-        ingreso del mes entre lo que necesitás, lo que querés y lo que ahorrás.
+        ingreso del mes entre lo que necesitas, lo que quieres y lo que ahorras.
       </p>
 
       <div className="border-border bg-muted/30 mt-6 rounded-lg border p-4">
@@ -40,8 +40,8 @@ export default function OnboardingWelcomePage() {
       </div>
 
       <p className="text-muted-foreground mt-6 text-sm leading-relaxed">
-        Son tres datos: una cuenta donde tenés tu dinero, tu ingreso del mes y
-        cómo querés repartirlo. Se puede cambiar después.
+        Son tres datos: una cuenta donde tienes tu dinero, tu ingreso del mes y
+        cómo quieres repartirlo. Se puede cambiar después.
       </p>
 
       <div className="mt-auto pt-8">

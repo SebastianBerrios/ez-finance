@@ -24,7 +24,7 @@ export async function cancelAccountDeletionAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+    return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
 
   const deletion = new SupabaseDeletionAdapter();
@@ -40,7 +40,7 @@ export async function cancelAccountDeletionAction(
       };
     }
     if (result.error.kind === "SessionExpired") {
-      return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+      return { error: "Sesión expirada. Por favor ingresa de nuevo." };
     }
     return { error: GENERIC_ERROR };
   }

@@ -75,7 +75,7 @@ export function ResetPasswordForm({ action }: ResetPasswordFormProps) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="reset-password-confirm">Confirmá la contraseña</Label>
+        <Label htmlFor="reset-password-confirm">Confirma la contraseña</Label>
         <Input
           id="reset-password-confirm"
           name="confirmPassword"

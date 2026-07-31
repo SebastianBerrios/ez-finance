@@ -18,7 +18,7 @@ const COULD_NOT_SIGN_OUT =
 
 const COULD_NOT_READ_STATE =
   "No pudimos confirmar el estado de tu cuenta, así que no hicimos nada. " +
-  "Volvé a intentarlo en unos minutos.";
+  "Vuelve a intentarlo en unos minutos.";
 
 /**
  * "I saw the notice" — the terminal exit for an account whose grace period ran
@@ -51,7 +51,10 @@ export async function acknowledgeDeletionAction(
   }
 
   const deletion = new SupabaseDeletionAdapter();
-  const status = await getAccountDeletionStatus({ userId: user.id }, { deletion });
+  const status = await getAccountDeletionStatus(
+    { userId: user.id },
+    { deletion },
+  );
 
   if (!status.ok) {
     // Fail closed, and STAY PUT. Redirecting to /app would bounce off the (app)
@@ -88,7 +91,10 @@ export async function acknowledgeDeletionAction(
   const signedOut = await logout({ auth: new SupabaseAuthAdapter() });
 
   if (!signedOut.ok) {
-    console.error("[auth/deleted] sign-out after erasure failed:", signedOut.error);
+    console.error(
+      "[auth/deleted] sign-out after erasure failed:",
+      signedOut.error,
+    );
     return { error: COULD_NOT_SIGN_OUT };
   }
 

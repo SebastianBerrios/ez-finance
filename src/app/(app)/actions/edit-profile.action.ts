@@ -20,7 +20,7 @@ export async function editProfileAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "Sesión expirada. Por favor ingresá de nuevo." };
+    return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
 
   const displayNameRaw = (formData.get("displayName") as string | null) ?? "";

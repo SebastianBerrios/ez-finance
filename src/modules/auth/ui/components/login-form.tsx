@@ -76,7 +76,7 @@ export function LoginForm({ action }: LoginFormProps) {
       </Button>
 
       <p className="text-muted-foreground text-center text-sm">
-        ¿No tenés cuenta?{" "}
+        ¿No tienes cuenta?{" "}
         <Link
           href="/register"
           className="text-foreground underline-offset-4 hover:underline"

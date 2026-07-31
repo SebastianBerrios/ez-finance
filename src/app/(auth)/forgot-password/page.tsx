@@ -14,7 +14,7 @@ export default function ForgotPasswordPage() {
         Recuperá tu contraseña
       </h2>
       <p className="text-muted-foreground mb-6 text-center text-sm">
-        Ingresá tu correo y te enviaremos las instrucciones.
+        Ingresa tu correo y te enviaremos las instrucciones.
       </p>
       <ForgotPasswordForm action={requestRecoveryAction} />
     </>

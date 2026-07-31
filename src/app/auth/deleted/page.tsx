@@ -81,7 +81,7 @@ export default async function DeletedPage() {
           className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
         >
           No pudimos leer el estado de tu cuenta, así que no hicimos nada.
-          Volvé a intentarlo en unos minutos.
+          Vuelve a intentarlo en unos minutos.
         </p>
         <Link
           href="/auth/deleted"

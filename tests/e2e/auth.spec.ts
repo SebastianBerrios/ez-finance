@@ -12,13 +12,9 @@ test.describe("Auth pages smoke tests", () => {
     await expect(page).toHaveTitle(/ingresar/i);
 
     // Spanish labels present
-    await expect(
-      page.getByLabel(/correo electrónico/i),
-    ).toBeVisible();
+    await expect(page.getByLabel(/correo electrónico/i)).toBeVisible();
     await expect(page.getByLabel(/contraseña/i)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /ingresar/i }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /ingresar/i })).toBeVisible();
 
     // No horizontal overflow at 360px
     const scrollWidth = await page.evaluate(() => document.body.scrollWidth);
@@ -36,9 +32,7 @@ test.describe("Auth pages smoke tests", () => {
     await expect(page).toHaveTitle(/crear cuenta/i);
 
     // Spanish labels present
-    await expect(
-      page.getByLabel(/correo electrónico/i),
-    ).toBeVisible();
+    await expect(page.getByLabel(/correo electrónico/i)).toBeVisible();
     await expect(page.getByLabel(/contraseña/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /crear cuenta/i }),
@@ -209,7 +203,9 @@ test.describe("Auth pages smoke tests", () => {
     await expect(page.getByRole("status")).toContainText(/30 días/i);
   });
 
-  test("/login shows no deletion notice on a normal visit", async ({ page }) => {
+  test("/login shows no deletion notice on a normal visit", async ({
+    page,
+  }) => {
     await page.goto("/login");
 
     await expect(page.getByRole("status")).toHaveCount(0);
@@ -225,11 +221,13 @@ test.describe("Auth pages smoke tests", () => {
     expect(response?.status()).toBe(200);
 
     // Spanish heading present
-    await expect(page.getByRole("heading", { name: /establecé tu nueva contraseña/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /establece tu nueva contraseña/i }),
+    ).toBeVisible();
 
     // Form fields present in Spanish
     await expect(page.getByLabel(/nueva contraseña/i)).toBeVisible();
-    await expect(page.getByLabel(/confirmá la contraseña/i)).toBeVisible();
+    await expect(page.getByLabel(/confirma la contraseña/i)).toBeVisible();
     await expect(
       page.getByRole("button", { name: /establecer contraseña/i }),
     ).toBeVisible();

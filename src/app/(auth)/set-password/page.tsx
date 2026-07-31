@@ -17,10 +17,10 @@ export default function SetPasswordPage() {
   return (
     <>
       <h2 className="text-foreground mb-2 text-center text-xl font-semibold">
-        Establecé tu nueva contraseña
+        Establece tu nueva contraseña
       </h2>
       <p className="text-muted-foreground mb-6 text-center text-sm">
-        Ingresá y confirmá tu nueva contraseña.
+        Ingresa y confirma tu nueva contraseña.
       </p>
       <ResetPasswordForm action={resetPasswordAction} />
     </>

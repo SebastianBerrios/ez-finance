@@ -112,7 +112,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                 className="bg-destructive/10 text-destructive mb-4 rounded-lg px-4 py-3 text-sm"
               >
                 No pudimos leer el estado de tu cuenta, así que no mostramos
-                estas opciones para no hacer algo que no querías. Volvé a
+                estas opciones para no hacer algo que no querías. Vuelve a
                 intentarlo en unos minutos.
               </p>
               <a
