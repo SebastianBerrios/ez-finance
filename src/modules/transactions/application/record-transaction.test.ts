@@ -6,6 +6,9 @@ import { recordTransaction } from "./record-transaction";
 function makePort(overrides: Partial<TransactionPort> = {}): TransactionPort {
   return {
     record: vi.fn().mockResolvedValue({ ok: true, value: { id: "tx-1" } }),
+    listForMonth: vi.fn().mockResolvedValue({ ok: true, value: [] }),
+    deleteOne: vi.fn().mockResolvedValue({ ok: true, value: 1 }),
+    deleteTransfer: vi.fn().mockResolvedValue({ ok: true, value: 2 }),
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ import type {
   AccountPort,
   AccountRef,
   AccountSummary,
+  AccountWithBalance,
 } from "@/modules/accounts/application/ports/account-port";
 import type { AccountDraft } from "@/modules/accounts/domain/account-draft";
 import type { AccountError } from "@/modules/accounts/domain/account-error";
@@ -42,6 +43,13 @@ function mapPostgresError(error: PostgresErrorLike): AccountError {
 }
 
 const SUMMARY_COLUMNS = "id, name, type, currency, archived_at";
+
+/** One row of ez_finance.account_balances(). bigint arrives as a string. */
+interface BalanceRow {
+  readonly account_id: string;
+  readonly balance: string | number;
+  readonly movement_count: string | number;
+}
 
 interface AccountRow {
   readonly id: string;
@@ -113,6 +121,47 @@ export class SupabaseAccountAdapter implements AccountPort {
       // workspace" indistinguishable, and an empty list is the honest answer to
       // both — inventing WorkspaceNotFound here would be a guess.
       return ok(((data ?? []) as AccountRow[]).map(toSummary));
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
+  async listWithBalances(
+    workspaceId: string,
+  ): Promise<Result<readonly AccountWithBalance[], AccountError>> {
+    try {
+      const supabase = await createServerClient();
+
+      // Two reads rather than a join, because the balance comes from an RPC and the
+      // names come from the table. Both are already scoped by RLS, so the join is
+      // done here in one pass over a handful of rows.
+      const [accounts, balances] = await Promise.all([
+        this.listByWorkspace(workspaceId),
+        supabase.rpc("account_balances", { p_workspace_id: workspaceId }),
+      ]);
+
+      if (!accounts.ok) return accounts;
+      if (balances.error) return err(mapPostgresError(balances.error));
+
+      const byAccount = new Map<string, BalanceRow>();
+      for (const row of (balances.data ?? []) as BalanceRow[]) {
+        byAccount.set(row.account_id, row);
+      }
+
+      return ok(
+        accounts.value.map((account) => {
+          const row = byAccount.get(account.id);
+          return {
+            ...account,
+            // A missing row would mean the RPC and the table disagree about which
+            // accounts exist. Falling back to 0 rather than dropping the account:
+            // an account absent from a list is invisible, while a zero is a figure
+            // someone will question.
+            balanceMinorUnits: row ? BigInt(row.balance) : 0n,
+            movementCount: row ? Number(row.movement_count) : 0,
+          };
+        }),
+      );
     } catch {
       return err({ kind: "Unavailable" });
     }

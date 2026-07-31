@@ -208,3 +208,28 @@ rather than a rule (a 70/20/10 split is accepted), `effective_from` must be a mo
 boundary or "in force for month M" stops being well defined, and
 `budget_config_for` is SECURITY **INVOKER** — a non-member reads nothing through it
 instead of borrowing the owner's rights, which a DEFINER would have handed over.
+
+## account_balances.sql
+
+Covers `20260728231500_ez_finance_account_balances.sql`. 13 checks,
+`ALL CHECKS PASSED`. Disjoint fixtures, so it runs alongside the other suites after
+one reset.
+
+**This file is the only thing standing between a wrong sign and a wrong balance on
+screen**, because `ez_finance.account_balances()` is the ONLY implementation of the
+sign rule anywhere in the codebase — income and transfer-in add, expense and
+transfer-out subtract. There is deliberately no TypeScript version to disagree with
+it: a balance spans the whole history, so the dashboard's one-month snapshot cannot
+produce it, and deriving it in the app would mean loading every transaction a
+workspace ever recorded to render a list.
+
+The transfer case is the one worth reading. A flipped leg still looks plausible from
+one side, so the suite asserts all three facts at once: the OUT leg subtracts from
+the source, the IN leg adds to the destination, and the workspace TOTAL does not
+move — a transfer only relocates money.
+
+Also pinned: an account with no movements reports its opening balance (a LEFT JOIN
+mistake would drop exactly those rows), `movement_count` tells "nothing recorded"
+apart from "nets to zero", a card opens and stays negative, an ARCHIVED account
+keeps its balance and stays listed, and the function is SECURITY **INVOKER** so
+neither a non-member nor anon reads anything through it.
