@@ -180,3 +180,31 @@ What it pins that a schema read cannot tell you:
 - **`record_transfer()` re-checks membership itself.** It is SECURITY DEFINER in
   order to bypass the `kind <> 'transfer'` guard, which also means it bypasses
   RLS — so an observer is rejected inside the function, not by a policy.
+
+## budget_configs.sql
+
+Covers `20260728203000_ez_finance_budget_configs.sql` — the input `computeBudget`
+cannot run without. 19 checks, `ALL CHECKS PASSED`. Disjoint fixtures again, so
+`accounts_categories.sql`, `transactions.sql` and this one all run after ONE reset
+(30 + 28 + 19).
+
+The table is TEMPORAL — one row per CHANGE, keyed by a month-boundary
+`effective_from`, and `budget_config_for(workspace, month)` resolves the greatest
+one at or before that month. The suite exists mostly to pin that, because it is
+the difference between a dashboard that tells the truth about the past and one that
+quietly re-scales it:
+
+- Raising the expected income from June leaves March reading the January config.
+- The day before a change still resolves to the previous config.
+- A month before the FIRST config resolves to nothing, so the engine is never
+  handed a guessed budget.
+- Editing a past row DOES change the months it governs — asserted, because that is
+  the intended escape hatch for a genuine correction, as distinct from a new
+  config, which must not reach backwards.
+
+Also pinned: percentages must sum to 100 and none may be negative (the engine
+rejects both, so an unusable config should not be storable), 50/30/20 is a default
+rather than a rule (a 70/20/10 split is accepted), `effective_from` must be a month
+boundary or "in force for month M" stops being well defined, and
+`budget_config_for` is SECURITY **INVOKER** — a non-member reads nothing through it
+instead of borrowing the owner's rights, which a DEFINER would have handed over.

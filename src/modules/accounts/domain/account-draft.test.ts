@@ -5,7 +5,7 @@ import { accountDraft } from "./account-draft";
 const VALID = {
   name: "Efectivo",
   type: "cash",
-  currency: "USD",
+  currency: "PEN",
   initialBalanceMinorUnits: 0n,
 } as const;
 
@@ -17,7 +17,7 @@ describe("accountDraft.create", () => {
     if (result.ok) {
       expect(result.value.name).toBe("Efectivo");
       expect(result.value.type).toBe("cash");
-      expect(result.value.currency).toBe("USD");
+      expect(result.value.currency).toBe("PEN");
       expect(result.value.initialBalanceMinorUnits).toBe(0n);
     }
   });
@@ -73,11 +73,11 @@ describe("accountDraft.create", () => {
     if (!result.ok) expect(result.error.kind).toBe("UnsupportedCurrency");
   });
 
-  it("rejects ARS — a REAL currency the product does not support yet", () => {
-    // Not a quirk of this module: shared/domain/money.ts recognises exactly
-    // EUR, USD, GBP, JPY and KWD, so a Spanish-language app cannot currently
-    // hold an Argentine account. Recorded as a test rather than a comment so it
-    // fails loudly the day someone widens CURRENCIES and forgets this exists.
+  it("rejects ARS — a REAL currency the product does not support", () => {
+    // The product operates in PEN. Other currencies exist in
+    // shared/domain/money.ts only because the arithmetic is tested against
+    // differing exponents, so "supported by Money" is NOT the same as "offered
+    // by the app" — and a currency nobody added is refused rather than assumed.
     //
     // Note the DB is MORE permissive: accounts.currency is a bare char(3) with
     // no whitelist, so this domain check is the only gate. A direct SQL insert
@@ -89,10 +89,10 @@ describe("accountDraft.create", () => {
   });
 
   it("uppercases the currency before validating it", () => {
-    const result = accountDraft.create({ ...VALID, currency: "usd" });
+    const result = accountDraft.create({ ...VALID, currency: "pen" });
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.currency).toBe("USD");
+    if (result.ok) expect(result.value.currency).toBe("PEN");
   });
 
   it("accepts a NEGATIVE opening balance", () => {

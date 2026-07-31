@@ -14,6 +14,11 @@ export type CurrencyCode = string & { readonly __brand: "CurrencyCode" };
 // ---------------------------------------------------------------------------
 
 const CURRENCIES: Readonly<Record<string, number>> = Object.freeze({
+  // PEN is the currency the product actually operates in. The rest predate that
+  // decision and are kept because the arithmetic is exercised against differing
+  // exponents (JPY has 0, KWD has 3) — dropping them would delete test coverage
+  // of the rounding rules, not simplify anything. The UI offers PEN only.
+  PEN: 2,
   EUR: 2,
   USD: 2,
   GBP: 2,
@@ -125,12 +130,13 @@ export function toParts(m: Money): MoneyParts {
 // Same-currency algebra (guard currency MATCH only; codes valid by invariant)
 // ---------------------------------------------------------------------------
 
-export function add(
-  a: Money,
-  b: Money,
-): Result<Money, CurrencyMismatchError> {
+export function add(a: Money, b: Money): Result<Money, CurrencyMismatchError> {
   if (a.currency !== b.currency) {
-    return err({ kind: "CurrencyMismatch", left: a.currency, right: b.currency });
+    return err({
+      kind: "CurrencyMismatch",
+      left: a.currency,
+      right: b.currency,
+    });
   }
   return ok(unsafeMoney(a.currency, a.minorUnits + b.minorUnits));
 }
@@ -140,7 +146,11 @@ export function subtract(
   b: Money,
 ): Result<Money, CurrencyMismatchError> {
   if (a.currency !== b.currency) {
-    return err({ kind: "CurrencyMismatch", left: a.currency, right: b.currency });
+    return err({
+      kind: "CurrencyMismatch",
+      left: a.currency,
+      right: b.currency,
+    });
   }
   return ok(unsafeMoney(a.currency, a.minorUnits - b.minorUnits));
 }
@@ -150,7 +160,11 @@ export function compare(
   b: Money,
 ): Result<-1 | 0 | 1, CurrencyMismatchError> {
   if (a.currency !== b.currency) {
-    return err({ kind: "CurrencyMismatch", left: a.currency, right: b.currency });
+    return err({
+      kind: "CurrencyMismatch",
+      left: a.currency,
+      right: b.currency,
+    });
   }
   if (a.minorUnits < b.minorUnits) return ok(-1);
   if (a.minorUnits > b.minorUnits) return ok(1);
@@ -271,8 +285,7 @@ export function allocate(m: Money, weights: readonly bigint[]): Money[] {
 
   // Distribute |remainder| units, one at a time, to parts with largest |fraction|
   // Ties broken by lowest index (deterministic). Direction follows sign of remainder.
-  const remainderAbs =
-    remainder < 0n ? -remainder : remainder;
+  const remainderAbs = remainder < 0n ? -remainder : remainder;
   const step = remainder < 0n ? -1n : 1n;
 
   // Sort indices by fraction descending, tie-break by index ascending
