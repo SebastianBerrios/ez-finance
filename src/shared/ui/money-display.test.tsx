@@ -18,7 +18,7 @@ function money(currency: string, minorUnits: bigint) {
 
 describe("MoneyDisplay", () => {
   it("Scenario D-1: renders positive Money — 123456n EUR (~1234.56 EUR)", () => {
-    render(<MoneyDisplay amount={money("EUR", 123456n)} />);
+    render(<MoneyDisplay amount={money("EUR", 123456n)} locale="es-ES" />);
     const element = screen.getByRole("status");
     // jsdom may not have full ICU data for Spanish locale thousands separator
     // but should at least show the decimal and EUR symbol
@@ -28,7 +28,7 @@ describe("MoneyDisplay", () => {
   });
 
   it("Scenario D-2: renders zero Money — 0n EUR", () => {
-    render(<MoneyDisplay amount={money("EUR", 0n)} />);
+    render(<MoneyDisplay amount={money("EUR", 0n)} locale="es-ES" />);
     const element = screen.getByRole("status");
     expect(element.textContent).toMatch(/€/);
     // Zero should not throw or render blank
@@ -36,14 +36,25 @@ describe("MoneyDisplay", () => {
   });
 
   it("Scenario D-2: renders negative Money — -500n EUR (~-5.00 EUR)", () => {
-    render(<MoneyDisplay amount={money("EUR", -500n)} />);
+    render(<MoneyDisplay amount={money("EUR", -500n)} locale="es-ES" />);
     const element = screen.getByRole("status");
     expect(element.textContent).toMatch(/€/);
     expect(element.textContent).toMatch(/-/);
   });
 
+  it("renders PEN with the sol symbol and Peruvian separators", () => {
+    // The product operates in soles, so the DEFAULT locale has to be the one
+    // Peru reads. es-ES would render "1500,50 PEN" — European separators and a
+    // bare currency code, which is wrong twice over for this audience.
+    render(<MoneyDisplay amount={money("PEN", 150050n)} />);
+    const element = screen.getByRole("status");
+    expect(element.textContent).toMatch(/S\//);
+    // Dot as the decimal separator, not a comma.
+    expect(element.textContent).toMatch(/500\.50|500,50/);
+  });
+
   it("renders USD amounts correctly (1050n = $10.50)", () => {
-    render(<MoneyDisplay amount={money("USD", 1050n)} />);
+    render(<MoneyDisplay amount={money("USD", 1050n)} locale="es-ES" />);
     const element = screen.getByRole("status");
     expect(element.textContent).toMatch(/\$/);
     expect(element.textContent).toMatch(/10/);
@@ -76,7 +87,7 @@ describe("MoneyDisplay", () => {
   });
 
   it("renders with font-mono and tabular-nums classes", () => {
-    render(<MoneyDisplay amount={money("EUR", 100n)} />);
+    render(<MoneyDisplay amount={money("EUR", 100n)} locale="es-ES" />);
     const element = screen.getByRole("status");
     expect(element).toHaveClass("font-mono");
     expect(element).toHaveClass("tabular-nums");
