@@ -18,24 +18,34 @@ type SplitActionFn = (
 interface SplitFormProps {
   action: SplitActionFn;
   initial: { need: number; want: number; save: number };
+  /** The wizard's first step continues; a later edit saves. */
+  submitLabel: string;
 }
 
 const initialState: SplitFormState = {};
 
+/**
+ * Labels match the explanation this form sits under, word for word.
+ *
+ * The dashboard's cards keep the shorter "Necesidades / Deseos / Ahorro" — a card
+ * title has room for two words, not four. Here, where the concept is being taught
+ * for the first time, the longer phrasing is the point: "Caprichos" tells someone
+ * what the 30 % is for in a way "Deseos" does not.
+ */
 const FIELDS = [
   {
     key: "need" as const,
-    label: "Necesidades",
+    label: "Necesidades primarias",
     hint: "Alquiler, servicios, comida, transporte, salud.",
   },
   {
     key: "want" as const,
-    label: "Deseos",
+    label: "Caprichos",
     hint: "Salidas, suscripciones, ropa, ocio.",
   },
   {
     key: "save" as const,
-    label: "Ahorro",
+    label: "Ahorro para el futuro",
     hint: "Lo que guardas o destinas a pagar deudas.",
   },
 ];
@@ -51,7 +61,7 @@ function parsePercentage(raw: string): number | null {
   return value >= 0 && value <= 100 ? value : null;
 }
 
-export function SplitForm({ action, initial }: SplitFormProps) {
+export function SplitForm({ action, initial, submitLabel }: SplitFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
   const [values, setValues] = useState({
     need: String(initial.need),
@@ -135,7 +145,7 @@ export function SplitForm({ action, initial }: SplitFormProps) {
         person from discovering the rule by being rejected.
       */}
       <Button type="submit" disabled={isPending || !sumIsOk} className="w-full">
-        {isPending ? "Guardando…" : "Terminar"}
+        {isPending ? "Guardando…" : submitLabel}
       </Button>
     </form>
   );
