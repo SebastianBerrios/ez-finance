@@ -10,10 +10,15 @@ import { getMonthlyBudget } from "@/modules/budget/application/get-monthly-budge
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { SupabaseMonthlySnapshotAdapter } from "@/modules/budget/infrastructure/supabase-monthly-snapshot-adapter";
 import { BucketCard } from "@/modules/budget/ui/components/bucket-card";
+import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
+import { MovementList } from "@/modules/transactions/ui/components/movement-list";
+import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { type Money, fromMinorUnits } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 import { MoneyDisplay } from "@shared/ui/money-display";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
+
+import { deleteMovementAction } from "./delete-movement.action";
 
 /**
  * A balance as Money, for MoneyDisplay.
@@ -60,9 +65,18 @@ export default async function AppPage() {
 
   const now = new Date();
 
-  const accounts = await new SupabaseAccountAdapter().listWithBalances(
-    entry.value.workspaceId,
-  );
+  // Memoized for this request by the layout, so this is a cache hit rather than a
+  // second round trip to the Auth server.
+  const { user } = await getAuthenticatedUser();
+
+  const [accounts, movements] = await Promise.all([
+    new SupabaseAccountAdapter().listWithBalances(entry.value.workspaceId),
+    new SupabaseTransactionAdapter().listForMonth(
+      entry.value.workspaceId,
+      now,
+      user?.id ?? "",
+    ),
+  ]);
 
   const budget = await getMonthlyBudget(
     { workspaceId: entry.value.workspaceId, month: now },
@@ -210,6 +224,34 @@ export default async function AppPage() {
             </ul>
           </section>
         )}
+
+        <section className="bg-card border-border rounded-xl border p-5">
+          <h2 className="text-muted-foreground text-xs tracking-widest uppercase">
+            Movimientos del mes
+          </h2>
+          <div className="mt-3">
+            {/*
+              A FAILED read is not an empty month. Rendering the empty state here
+              would say "you recorded nothing" when the truth is "we could not
+              look" — and that is exactly how a broken query hid behind a
+              plausible screen while this was being built.
+            */}
+            {movements.ok ? (
+              <MovementList
+                movements={movements.value}
+                deleteAction={deleteMovementAction}
+                currency={
+                  accounts.ok ? (accounts.value[0]?.currency ?? "PEN") : "PEN"
+                }
+              />
+            ) : (
+              <p role="alert" className="text-destructive text-sm">
+                No pudimos leer tus movimientos. Intenta de nuevo en unos
+                minutos.
+              </p>
+            )}
+          </div>
+        </section>
 
         {/*
           The primary action, and placed after the numbers on purpose: the person

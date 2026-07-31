@@ -320,5 +320,32 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        where  u.email = '${email}' and t.kind = 'expense'`,
     );
     expect(recorded).toBe("expense|15050|PEN|1.0000000000|Supermercado");
+
+    // --- the list shows it, and the balance reflects it ---------------------
+    await expect(page.getByText(/movimientos del mes/i)).toBeVisible();
+    // The expense is labelled by its CATEGORY, which is what a person recognises.
+    await expect(page.getByText("Supermercado").first()).toBeVisible();
+
+    // Efectivo: opened at 1500.50, +1000 income, -150.50 expense = 2350.00
+    await expect(page.getByText(/S\/\s*2,350\.00/).first()).toBeVisible();
+
+    // --- deleting it puts the money back -----------------------------------
+    // The real test of the sign rule and of the delete path together: the figures
+    // have to move BACK, not just change.
+    await page.getByRole("button", { name: /eliminar supermercado/i }).click();
+
+    // Needs returns to the full 600.00, the expense leaves the list, and the
+    // balance goes back to 1500.50 + 1000.
+    await expect(page.getByText("Supermercado")).toHaveCount(0);
+    await expect(page.getByText(/S\/\s*600\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*2,500\.50/).first()).toBeVisible();
+
+    const remaining = sql(
+      `select count(*) from ez_finance.transactions t
+       join   ez_finance.workspace_members m on m.workspace_id = t.workspace_id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and t.kind = 'expense'`,
+    );
+    expect(Number(remaining), "the row is gone, not hidden").toBe(0);
   });
 });
