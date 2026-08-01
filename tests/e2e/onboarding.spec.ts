@@ -132,15 +132,29 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
 
     // --- step 1 also TEACHES the method, which is the reason it comes first ---
     // The three shares are named and quantified before anything is asked.
-    await expect(page.getByText(/necesidades primarias/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/necesidades primarias/i).first(),
+    ).toBeVisible();
     await expect(page.getByText(/caprichos/i).first()).toBeVisible();
-    await expect(page.getByText(/ahorro para el futuro/i).first()).toBeVisible();
+    await expect(
+      page.getByText(/ahorro para el futuro/i).first(),
+    ).toBeVisible();
     await expect(page.getByText(/se mide sobre tu ingreso/i)).toBeVisible();
 
-    // --- step 1: the split, prefilled at 50/30/20 and enforced live ----------
+    // --- step 1: the split is PREFILLED and COLLAPSED ------------------------
+    // Present in the DOM with the right values, but not visible: the disclosure is
+    // shut by default so the common path is read-three-lines-and-press-Empezar
+    // rather than scrolling past three number fields nobody wanted to change.
     await expect(page.locator("#split-need")).toHaveValue("50");
     await expect(page.locator("#split-want")).toHaveValue("30");
     await expect(page.locator("#split-save")).toHaveValue("20");
+    await expect(page.locator("#split-need")).toBeHidden();
+
+    // That combination is the whole reason it is a native <details>: a collapsed
+    // field still submits, so the default split posts without being opened. React
+    // state that unmounted the inputs would have posted nothing.
+    await page.getByText(/¿quieres cambiar el reparto\?/i).click();
+    await expect(page.locator("#split-need")).toBeVisible();
 
     // A split that does not sum to 100 cannot be submitted. Asserting the RUNNING
     // TOTAL rather than the rule: "tienen que sumar 100" also appears in the prose
@@ -188,7 +202,10 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await expect(page.getByText(/875/)).toBeVisible();
     await expect(page.getByText(/525/)).toBeVisible();
 
-    await page.check("#income-mode-real");
+    // No income-mode question any more: the wizard fixes `mayor`, which is
+    // max(received, expected). Nothing to choose, so nothing to click.
+    await expect(page.locator("#income-mode-real")).toHaveCount(0);
+
     await page.getByRole("button", { name: /terminar/i }).click();
 
     // --- the wizard TERMINATES on the dashboard ----------------------------
@@ -214,7 +231,7 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        where  u.email = '${email}'`,
     );
 
-    expect(stored).toBe("Efectivo|cash|PEN|150050|real|350000|60/25/15");
+    expect(stored).toBe("Efectivo|cash|PEN|150050|mayor|350000|60/25/15");
 
     const archivedOcio = sql(
       `select count(*) from ez_finance.categories c
@@ -252,31 +269,32 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await expect(page.getByText("15%")).toBeVisible();
     await expect(page.getByText("50%")).toHaveCount(0);
 
-    // EVERY figure reads zero, and that is the engine obeying the income mode this
-    // wizard run chose — not an empty dashboard.
+    // THE TARGETS ARE THE CHOSEN SHARES OF THE STATED SALARY, and that is the whole
+    // chain working: 3500.00 through 60/25/15 is 2100 / 875 / 525.
     //
-    // Step 4 selected "real", which counts only income ALREADY RECEIVED. No income
-    // transaction exists yet, so the effective income is 0 and all three targets
-    // are 0 with it. The form says as much next to the option ("a inicio de mes
-    // verás todo en 0 %"), and asserting it here is what proves the choice
-    // travelled from the radio button through the database into computeBudget. An
-    // expectation of S/ 3,500.00 would have been asserting the DEFAULT mode's
-    // behaviour while the test had deliberately picked another.
+    // This assertion replaces one that expected every figure to read S/ 0.00. That
+    // was correct while step 4 could select the "real" income mode, which counts only
+    // money ALREADY RECEIVED — with no income transaction yet, the effective income
+    // was 0. The wizard no longer offers that choice and fixes `mayor`, so the
+    // effective income is max(0 received, 3500 expected) = 3500 and the buckets are
+    // funded from the start. The mode logic itself is still covered, in
+    // income-resolver.test.ts.
     //
-    // Matched by REGEX because Intl separates the symbol from the digits with
-    // U+00A0: "S/ 0.00" typed with an ordinary space does not match what renders.
-    await expect(page.getByText(/S\/\s*0\.00/).first()).toBeVisible();
+    // Matched by REGEX because Intl separates the symbol from the digits with U+00A0:
+    // "S/ 2,100.00" typed with an ordinary space does not match what renders.
+    await expect(page.getByText(/S\/\s*2[.,]100\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*875\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*525\.00/).first()).toBeVisible();
 
-    // Zero income yields 0 %, never a blank or a NaN — the engine's documented
-    // guard for a month with no money in it.
+    // Nothing spent yet, so every bar is still at 0 % OF a funded target — which is
+    // a different statement from the targets themselves being 0.
     const bars = page.getByRole("progressbar");
     await expect(bars).toHaveCount(3);
     for (let index = 0; index < 3; index++) {
       await expect(bars.nth(index)).toHaveAttribute("aria-valuenow", "0");
     }
 
-    // And the stored expected income IS the 3500 that was typed — the zeroes above
-    // are the mode's doing, not lost data.
+    // The stored income is the 3500 that was typed, under the mode the wizard fixes.
     const storedIncome = sql(
       `select c.expected_income || '|' || c.income_mode
        from   ez_finance.budget_configs c
@@ -284,16 +302,15 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        join   auth.users u on u.id = m.user_id
        where  u.email = '${email}'`,
     );
-    expect(storedIncome).toBe("350000|real");
+    expect(storedIncome).toBe("350000|mayor");
 
     // --- recording money MOVES the buckets ---------------------------------
     // Everything above proves setup stored what it claimed. This proves the loop
-    // closes: under mode "real" the dashboard only comes alive once income is
-    // actually recorded, which is the behaviour the form promised.
+    // closes.
     await page.getByRole("link", { name: /registrar movimiento/i }).click();
     await page.waitForURL(/\/app\/movimientos\/nuevo/);
 
-    // An income of 1000 — the denominator the buckets are measured against.
+    // An income of 1000, which is LESS than the 3500 salary that was stated.
     // The radio itself is sr-only, so it is not a clickable target — the visible
     // control is its label, which is what a person actually presses.
     await page.locator('label[for="kind-income"]').click();
@@ -301,10 +318,14 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await page.getByRole("button", { name: /registrar/i }).click();
     await page.waitForURL(/\/app$/);
 
-    // 60 % of 1000 for needs, 15 % for savings — the person's own split applied to
-    // income that now exists.
-    await expect(page.getByText(/S\/\s*600\.00/).first()).toBeVisible();
-    await expect(page.getByText(/S\/\s*150\.00/).first()).toBeVisible();
+    // AND THE TARGETS DO NOT MOVE. That is the point of the `mayor` mode the wizard
+    // now fixes: the effective income is max(1000 received, 3500 expected), so a
+    // month where only part of the salary has landed still budgets against the whole
+    // salary. Under the old "real" mode these same figures were 600 and 150 — the
+    // shares of 1000 — which is precisely the behaviour someone stating a fixed
+    // salary does not want.
+    await expect(page.getByText(/S\/\s*2[.,]100\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*525\.00/).first()).toBeVisible();
 
     // Now an expense against a NEEDS category, which must consume that bucket.
     await page.getByRole("link", { name: /registrar movimiento/i }).click();
@@ -318,8 +339,8 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await page.getByRole("button", { name: /registrar/i }).click();
     await page.waitForURL(/\/app$/);
 
-    // 600.00 - 150.50 left in needs, and the bar has moved off zero.
-    await expect(page.getByText(/S\/\s*449\.50/).first()).toBeVisible();
+    // 2100.00 - 150.50 left in needs, and the bar has moved off zero.
+    await expect(page.getByText(/S\/\s*1[.,]949\.50/).first()).toBeVisible();
 
     const needsBar = page.getByRole("progressbar").first();
     await expect(needsBar).not.toHaveAttribute("aria-valuenow", "0");
@@ -350,10 +371,10 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     // have to move BACK, not just change.
     await page.getByRole("button", { name: /eliminar supermercado/i }).click();
 
-    // Needs returns to the full 600.00, the expense leaves the list, and the
+    // Needs returns to the full 2100.00 target, the expense leaves the list, and the
     // balance goes back to 1500.50 + 1000.
     await expect(page.getByText("Supermercado")).toHaveCount(0);
-    await expect(page.getByText(/S\/\s*600\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*2[.,]100\.00/).first()).toBeVisible();
     await expect(page.getByText(/S\/\s*2,500\.50/).first()).toBeVisible();
 
     const remaining = sql(

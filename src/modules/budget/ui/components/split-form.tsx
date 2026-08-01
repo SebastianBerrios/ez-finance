@@ -92,57 +92,82 @@ export function SplitForm({ action, initial, submitLabel }: SplitFormProps) {
         </div>
       )}
 
-      {FIELDS.map((field) => (
-        <div key={field.key} className="flex flex-col gap-2">
-          <Label htmlFor={`split-${field.key}`}>{field.label} (%)</Label>
-          <Input
-            id={`split-${field.key}`}
-            name={field.key}
-            type="text"
-            inputMode="numeric"
-            required
-            value={values[field.key]}
-            onChange={(event) =>
-              setValues((previous) => ({
-                ...previous,
-                [field.key]: event.target.value,
-              }))
-            }
-            aria-describedby={`split-${field.key}-hint`}
-          />
-          <p
-            id={`split-${field.key}-hint`}
-            className="text-muted-foreground text-xs"
-          >
-            {field.hint}
-          </p>
-        </div>
-      ))}
-
       {/*
+        COLLAPSED BY DEFAULT, and a native <details> rather than React state on
+        purpose: form controls inside a closed <details> are still in the DOM and
+        still submit, so the pre-filled 50/30/20 posts whether or not it was ever
+        opened. Conditionally rendering the inputs would have submitted nothing.
+        It also needs no JS and gets the disclosure semantics for free.
+
+        The reason it is closed: three number fields and a running total pushed the
+        button below the fold on the one screen whose job is to be read. Almost
+        nobody changes these, so almost nobody should have to scroll past them.
+      */}
+      <details className="border-border rounded-lg border">
+        <summary className="text-foreground cursor-pointer px-4 py-3 text-sm font-medium">
+          ¿Quieres cambiar el reparto?
+        </summary>
+
+        <div className="flex flex-col gap-6 px-4 pt-2 pb-4">
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Cámbialos si tu situación pide otro reparto — solo tienen que sumar
+            100. También se puede ajustar más adelante.
+          </p>
+
+          {FIELDS.map((field) => (
+            <div key={field.key} className="flex flex-col gap-2">
+              <Label htmlFor={`split-${field.key}`}>{field.label} (%)</Label>
+              <Input
+                id={`split-${field.key}`}
+                name={field.key}
+                type="text"
+                inputMode="numeric"
+                required
+                value={values[field.key]}
+                onChange={(event) =>
+                  setValues((previous) => ({
+                    ...previous,
+                    [field.key]: event.target.value,
+                  }))
+                }
+                aria-describedby={`split-${field.key}-hint`}
+              />
+              <p
+                id={`split-${field.key}-hint`}
+                className="text-muted-foreground text-xs"
+              >
+                {field.hint}
+              </p>
+            </div>
+          ))}
+
+          {/*
         The running total, announced politely rather than assertively: it updates on
         every keystroke, and an assertive live region would interrupt a screen
         reader mid-word on each one.
       */}
-      <p
-        aria-live="polite"
-        className={
-          sumIsOk
-            ? "text-muted-foreground text-sm"
-            : "text-destructive text-sm font-medium"
-        }
-      >
-        {sum === null
-          ? "Escribe los tres porcentajes como números enteros."
-          : sumIsOk
-            ? "Suman 100 %."
-            : `Suman ${sum} %. Tienen que sumar 100 %.`}
-      </p>
+          <p
+            aria-live="polite"
+            className={
+              sumIsOk
+                ? "text-muted-foreground text-sm"
+                : "text-destructive text-sm font-medium"
+            }
+          >
+            {sum === null
+              ? "Escribe los tres porcentajes como números enteros."
+              : sumIsOk
+                ? "Suman 100 %."
+                : `Suman ${sum} %. Tienen que sumar 100 %.`}
+          </p>
+        </div>
+      </details>
 
       {/*
-        Disabled until the split is valid. The server validates again through the
-        engine's own validateConfig — this only saves a round trip and stops the
-        person from discovering the rule by being rejected.
+        Disabled until the split is valid — including while the disclosure is shut,
+        because a stored split that somehow does not sum to 100 must not sail
+        through just because nobody opened the fields. The server validates again
+        through the engine's own validateConfig.
       */}
       <Button type="submit" disabled={isPending || !sumIsOk} className="w-full">
         {isPending ? "Guardando…" : submitLabel}
