@@ -26,6 +26,11 @@ function configReturning(result: unknown) {
   mockRpc.mockResolvedValue(result);
 }
 
+/** A config row that governs the month, with a usable income. */
+function usableConfig(expectedIncome = 350000) {
+  return { data: [{ income_mode: "mayor", expected_income: expectedIncome }], error: null };
+}
+
 describe("readOnboardingStatus", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -33,7 +38,7 @@ describe("readOnboardingStatus", () => {
 
   it("is complete when the workspace has an account and a budget config", async () => {
     accountsReturning({ data: [{ id: "a1" }], error: null });
-    configReturning({ data: [{ income_mode: "mayor" }], error: null });
+    configReturning(usableConfig());
 
     const status = await readOnboardingStatus("ws-1");
 
@@ -57,7 +62,7 @@ describe("readOnboardingStatus", () => {
 
   it("is incomplete with a budget config but no account", async () => {
     accountsReturning({ data: [], error: null });
-    configReturning({ data: [{ income_mode: "mayor" }], error: null });
+    configReturning(usableConfig());
 
     const status = await readOnboardingStatus("ws-1");
 
@@ -75,13 +80,46 @@ describe("readOnboardingStatus", () => {
     // on the returned value could not tell the difference, because the mock does
     // not implement filtering.
     const { eq } = accountsReturning({ data: [{ id: "a1" }], error: null });
-    configReturning({ data: [{ income_mode: "mayor" }], error: null });
+    configReturning(usableConfig());
 
     const status = await readOnboardingStatus("ws-1");
 
     expect(status.hasAccount).toBe(true);
     expect(eq).toHaveBeenCalledTimes(1);
     expect(eq).toHaveBeenCalledWith("workspace_id", "ws-1");
+  });
+
+  it("is INCOMPLETE when a config exists but its income is still zero", async () => {
+    // The split step now runs FIRST, so a config can exist with the percentages
+    // chosen and no income yet. That is not a configured budget: every bucket
+    // target is a share of the income, so at zero the dashboard can only render
+    // three empty cubes and explain nothing. Treating it as complete would let
+    // someone who abandoned the wizard after step 2 land there permanently.
+    accountsReturning({ data: [{ id: "a1" }], error: null });
+    configReturning(usableConfig(0));
+
+    const status = await readOnboardingStatus("ws-1");
+
+    expect(status.hasAccount).toBe(true);
+    expect(status.hasBudgetConfig).toBe(false);
+    expect(status.complete).toBe(false);
+  });
+
+  it("accepts an income that PostgREST returned as a string", async () => {
+    // expected_income is a bigint. supabase-js hands those back as numbers today,
+    // but a string is the documented possibility for bigint columns, and a
+    // `> 0` comparison against a string would silently coerce — asserting it
+    // rather than trusting it.
+    accountsReturning({ data: [{ id: "a1" }], error: null });
+    configReturning({
+      data: [{ income_mode: "mayor", expected_income: "350000" }],
+      error: null,
+    });
+
+    const status = await readOnboardingStatus("ws-1");
+
+    expect(status.hasBudgetConfig).toBe(true);
+    expect(status.complete).toBe(true);
   });
 
   it("reports INCOMPLETE when the read fails", async () => {

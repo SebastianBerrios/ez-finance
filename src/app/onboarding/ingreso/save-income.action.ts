@@ -14,14 +14,15 @@ export interface IncomeFormState {
 const MINOR_UNIT_EXPONENT = 2;
 
 /**
- * Store the month's expected income, together with the 50/30/20 default split.
+ * Store the month's expected income, keeping the split chosen at step 1.
  *
- * It writes a COMPLETE config rather than half of one, because budget_configs has
- * no valid half-state: the percentages are NOT NULL and must sum to 100. So this
- * step commits a usable budget, and the next step refines the split. The
- * consequence is that the workspace counts as configured from here on, which is
- * exactly why the "already configured" redirect lives on the wizard root and not
- * in its layout.
+ * LAST step of the wizard, so it lands on /app: from here the workspace has an
+ * account and a config with a real income, and the (app) gate lets it through.
+ *
+ * The percentages are read back rather than received as hidden fields. Defaulting
+ * them here instead would be the bug this ordering invites: step 1 already stored
+ * the person's split, and writing 50/30/20 over it would silently discard the one
+ * answer they were asked to think about.
  */
 export async function saveIncomeAction(
   _prev: IncomeFormState,
@@ -50,16 +51,26 @@ export async function saveIncomeAction(
     return { error: "El ingreso no puede ser negativo." };
   }
 
+  const budget = new SupabaseBudgetConfigAdapter();
+
+  // Step 1 wrote the split. If it cannot be read we fall back to 50/30/20 rather
+  // than refusing: an unreadable config would otherwise trap someone one step from
+  // the end, and the method's own defaults are never a wrong answer.
+  const existing = await budget.findForMonth(entry.value.workspaceId, new Date());
+  const percentages =
+    existing.ok && existing.value !== null
+      ? existing.value.percentages
+      : { need: 50, want: 30, save: 20 };
+
   const result = await saveBudgetConfig(
     {
       workspaceId: entry.value.workspaceId,
       month: new Date(),
       incomeMode: (formData.get("incomeMode") as string | null) ?? "mayor",
       expectedIncomeMinorUnits: amount.value,
-      // The default split. The next step is where it stops being a default.
-      percentages: { need: 50, want: 30, save: 20 },
+      percentages,
     },
-    { budget: new SupabaseBudgetConfigAdapter() },
+    { budget },
   );
 
   if (!result.ok) {
@@ -77,5 +88,5 @@ export async function saveIncomeAction(
     }
   }
 
-  redirect("/onboarding/reparto");
+  redirect("/app");
 }

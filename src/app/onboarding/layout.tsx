@@ -15,12 +15,15 @@ export const dynamic = "force-dynamic";
  * itself. The middleware still requires a session for this path.
  *
  * NOTE ON WHAT IS *NOT* HERE. "Already configured, go to /app" lives on the wizard
- * ROOT page, not in this layout, and the difference is load-bearing: the income
- * step writes a complete config (income plus the 50/30/20 default), so from that
- * moment the workspace IS configured — and a blanket redirect here would throw the
- * person out of the wizard one step before the end. Each step guards only what it
- * can no longer ask: the account step skips itself when an account exists, because
- * the base currency it sets is immutable.
+ * ROOT page, not in this layout, and the difference is load-bearing: step 1 writes
+ * a config row the moment the split is chosen, so a blanket redirect here would
+ * throw the person out of the wizard on step 2. Each step guards only what it can
+ * no longer ask: the account step skips itself when an account exists, because the
+ * base currency it sets is immutable.
+ *
+ * What keeps that early config row from reading as "configured" is that
+ * readOnboardingStatus requires an income above zero, not merely a row — see the
+ * note on OnboardingStatus.hasBudgetConfig.
  */
 export default async function OnboardingLayout({
   children,

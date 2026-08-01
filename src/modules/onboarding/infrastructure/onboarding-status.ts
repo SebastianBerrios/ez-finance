@@ -12,7 +12,16 @@ import { createServerClient } from "@/shared/infrastructure/supabase/server";
 export interface OnboardingStatus {
   /** The workspace has at least one account, so its base currency is fixed. */
   readonly hasAccount: boolean;
-  /** A budget config governs the current month. */
+  /**
+   * A budget config governs the current month AND carries a usable income.
+   *
+   * The income is part of the question on purpose. The split step runs first, so
+   * a config can exist with the percentages chosen and the income still at its
+   * `0` default — and a bucket target is a SHARE of the income, so at zero the
+   * dashboard can only render three empty cubes and explain nothing. Counting
+   * that as configured would strand anyone who abandoned the wizard after the
+   * account step in a dashboard they cannot fix from there.
+   */
   readonly hasBudgetConfig: boolean;
   readonly complete: boolean;
 }
@@ -56,7 +65,14 @@ export async function readOnboardingStatus(
     if (accounts.error || config.error) return INCOMPLETE;
 
     const hasAccount = (accounts.data ?? []).length > 0;
-    const hasBudgetConfig = ((config.data ?? []) as unknown[]).length > 0;
+
+    // expected_income is a bigint, which PostgREST may hand back as a number or
+    // as a string. Number() covers both; a null or an unparseable value becomes
+    // NaN, and NaN > 0n is false, so the fail-closed direction is the default.
+    const configRow = ((config.data ?? []) as { expected_income?: unknown }[])[0];
+    const expectedIncome =
+      configRow === undefined ? Number.NaN : Number(configRow.expected_income);
+    const hasBudgetConfig = expectedIncome > 0;
 
     return {
       hasAccount,

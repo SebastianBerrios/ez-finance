@@ -27,7 +27,7 @@ export default async function OnboardingAccountPage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <p className="text-muted-foreground text-sm">Paso 2 de 5</p>
+      <p className="text-muted-foreground text-sm">Paso 2 de 4</p>
 
       <h1 className="text-foreground mt-2 text-2xl font-semibold">
         ¿Dónde tienes tu dinero?

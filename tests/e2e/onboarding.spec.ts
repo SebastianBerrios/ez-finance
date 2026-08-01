@@ -130,8 +130,32 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await page.goto("/app");
     await expect(page).toHaveURL(/\/onboarding$/);
 
+    // --- step 1 also TEACHES the method, which is the reason it comes first ---
+    // The three shares are named and quantified before anything is asked.
+    await expect(page.getByText(/necesidades primarias/i).first()).toBeVisible();
+    await expect(page.getByText(/caprichos/i).first()).toBeVisible();
+    await expect(page.getByText(/ahorro para el futuro/i).first()).toBeVisible();
+    await expect(page.getByText(/se mide sobre tu ingreso/i)).toBeVisible();
+
+    // --- step 1: the split, prefilled at 50/30/20 and enforced live ----------
+    await expect(page.locator("#split-need")).toHaveValue("50");
+    await expect(page.locator("#split-want")).toHaveValue("30");
+    await expect(page.locator("#split-save")).toHaveValue("20");
+
+    // A split that does not sum to 100 cannot be submitted. Asserting the RUNNING
+    // TOTAL rather than the rule: "tienen que sumar 100" also appears in the prose
+    // above, so matching it would pass on the explanation and prove nothing.
+    await page.fill("#split-need", "60");
+    await expect(page.getByText(/suman 110 %/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /empezar/i })).toBeDisabled();
+
+    // The person's own split — 50/30/20 is a default, not a rule.
+    await page.fill("#split-want", "25");
+    await page.fill("#split-save", "15");
+    await expect(page.getByText(/suman 100/i)).toBeVisible();
+    await page.getByRole("button", { name: /empezar/i }).click();
+
     // --- step 2: the account, which fixes the base currency -----------------
-    await page.getByRole("link", { name: /empezar/i }).click();
     await page.waitForURL(/\/onboarding\/cuenta/);
 
     await page.fill("#account-name", "Efectivo");
@@ -149,30 +173,22 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await ocio.uncheck();
     await page.getByRole("button", { name: /continuar/i }).click();
 
-    // --- step 4: income + mode ---------------------------------------------
+    // --- step 4 (LAST): income, and the split turned into soles -------------
     await page.waitForURL(/\/onboarding\/ingreso/);
+
+    // Silent until there is an amount to divide.
+    await expect(page.getByText(/así queda tu mes/i)).toBeHidden();
+
     await page.fill("#expected-income", "3500");
+
+    // The preview uses the split from step 1, not the 50/30/20 default:
+    // 60 % of 3500 is 2100, which 50 % would not be.
+    await expect(page.getByText(/así queda tu mes/i)).toBeVisible();
+    await expect(page.getByText(/2[.,]100/)).toBeVisible();
+    await expect(page.getByText(/875/)).toBeVisible();
+    await expect(page.getByText(/525/)).toBeVisible();
+
     await page.check("#income-mode-real");
-    await page.getByRole("button", { name: /continuar/i }).click();
-
-    // --- step 5: the split, with the sum enforced live ----------------------
-    await page.waitForURL(/\/onboarding\/reparto/);
-
-    // Prefilled from what step 4 stored, not reset to a default.
-    await expect(page.locator("#split-need")).toHaveValue("50");
-
-    // A split that does not sum to 100 cannot be submitted.
-    await page.fill("#split-need", "60");
-    await expect(page.getByText(/tienen que sumar 100/i)).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /terminar/i }),
-    ).toBeDisabled();
-
-    // The person's own split — 50/30/20 is a default, not a rule.
-    await page.fill("#split-need", "60");
-    await page.fill("#split-want", "25");
-    await page.fill("#split-save", "15");
-    await expect(page.getByText(/suman 100/i)).toBeVisible();
     await page.getByRole("button", { name: /terminar/i }).click();
 
     // --- the wizard TERMINATES on the dashboard ----------------------------

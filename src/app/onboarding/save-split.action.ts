@@ -19,10 +19,23 @@ function toPercentage(raw: FormDataEntryValue | null): number {
 }
 
 /**
- * Store the person's own split, replacing the 50/30/20 the income step wrote.
+ * Step 1 of the wizard: store how the month's income gets divided.
  *
- * Last step of the wizard, so it lands on /app: from here the workspace has both
- * an account and a config, and the (app) gate lets it through.
+ * WHY THIS RUNS FIRST. The split IS the product's idea, so asking it last hid the
+ * one thing a new person needs to understand. It is also the only step whose
+ * answer is already correct by default — 50/30/20 is pre-filled, so the fast path
+ * is a single click.
+ *
+ * WHAT IT COSTS, AND HOW THAT IS PAID FOR. budget_configs has no valid half-state:
+ * the percentages are NOT NULL and must sum to 100, so this writes a whole row,
+ * with expected_income left at its `0` default until the income step. That row
+ * would otherwise read as "this workspace is configured" the moment an account
+ * exists, and drop someone into a dashboard dividing by zero income. So
+ * readOnboardingStatus requires an income ABOVE zero, not merely a config row —
+ * see the note on OnboardingStatus.hasBudgetConfig.
+ *
+ * An existing income is never clobbered. Re-running the wizard, or coming back to
+ * change the split next month, must not silently reset what was already earned.
  */
 export async function saveSplitAction(
   _prev: SplitFormState,
@@ -35,24 +48,24 @@ export async function saveSplitAction(
 
   const budget = new SupabaseBudgetConfigAdapter();
 
-  // The income and the mode were chosen in the previous step; this step must not
-  // overwrite them with a default. Reading them back is what keeps the two steps
-  // independent — no hidden fields to keep in sync, no state carried in the URL.
+  // Read before write, so an income already chosen survives a change of split.
+  // A read FAILURE is not fatal here: it only means we cannot preserve an income
+  // that may not exist yet, and the income step is still ahead.
   const existing = await budget.findForMonth(entry.value.workspaceId, new Date());
-  if (!existing.ok) {
-    return { error: "No pudimos leer tu presupuesto. Intenta de nuevo." };
-  }
-  if (existing.value === null) {
-    // Nothing to refine — the income step never completed.
-    redirect("/onboarding/ingreso");
-  }
+  const carried =
+    existing.ok && existing.value !== null
+      ? {
+          incomeMode: existing.value.incomeMode,
+          expectedIncomeMinorUnits: existing.value.expectedIncomeMinorUnits,
+        }
+      : { incomeMode: "mayor", expectedIncomeMinorUnits: 0n };
 
   const result = await saveBudgetConfig(
     {
       workspaceId: entry.value.workspaceId,
       month: new Date(),
-      incomeMode: existing.value.incomeMode,
-      expectedIncomeMinorUnits: existing.value.expectedIncomeMinorUnits,
+      incomeMode: carried.incomeMode,
+      expectedIncomeMinorUnits: carried.expectedIncomeMinorUnits,
       percentages: {
         need: toPercentage(formData.get("need")),
         want: toPercentage(formData.get("want")),
@@ -65,17 +78,17 @@ export async function saveSplitAction(
   if (!result.ok) {
     switch (result.error.kind) {
       case "InvalidConfig":
-        return {
-          error: "Los porcentajes tienen que ser enteros y sumar 100.",
-        };
+        return { error: "Los porcentajes tienen que ser enteros y sumar 100." };
       case "NotPermitted":
         return {
           error: "No tienes permiso para editar el presupuesto de este espacio.",
         };
+      case "WorkspaceNotFound":
+        return { error: "No encontramos tu espacio financiero." };
       default:
         return { error: "No pudimos guardar el reparto. Intenta de nuevo." };
     }
   }
 
-  redirect("/app");
+  redirect("/onboarding/cuenta");
 }
