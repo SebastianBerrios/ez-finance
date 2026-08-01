@@ -271,6 +271,14 @@ export default async function AppPage() {
           setup, and setup cannot be re-entered.
         */}
         <Link
+          href="/app/cuentas"
+          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
+        >
+          <span className="text-sm font-medium">Cuentas</span>
+          <span className="text-sm">›</span>
+        </Link>
+
+        <Link
           href="/app/categorias"
           className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
         >
