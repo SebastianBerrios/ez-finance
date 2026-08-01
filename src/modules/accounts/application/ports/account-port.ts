@@ -65,4 +65,30 @@ export interface AccountPort {
   listWithBalances(
     workspaceId: string,
   ): Promise<Result<readonly AccountWithBalance[], AccountError>>;
+
+  /**
+   * Archive an account: stop offering it for new movements, keep everything it holds.
+   *
+   * NEVER a delete, and the reason is stronger here than for categories. An account's
+   * transactions ARE the money — deleting the row would either orphan them or take
+   * them with it, and in both cases every balance and every past month silently
+   * changes. Archiving leaves the history, and the balance, exactly where it was.
+   *
+   * The account therefore keeps appearing in lists, marked, WITH its balance. A
+   * hidden account whose money still counts toward nothing visible is how someone
+   * concludes the app lost it.
+   *
+   * Deliberately single-id rather than a batch: archiving an account is a considered
+   * act about one thing, not a bulk tidy-up like the onboarding category step.
+   */
+  archive(
+    workspaceId: string,
+    accountId: string,
+  ): Promise<Result<void, AccountError>>;
+
+  /** Clear `archived_at`, offering the account for new movements again. */
+  unarchive(
+    workspaceId: string,
+    accountId: string,
+  ): Promise<Result<void, AccountError>>;
 }

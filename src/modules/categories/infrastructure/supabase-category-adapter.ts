@@ -97,6 +97,32 @@ export class SupabaseCategoryAdapter implements CategoryPort {
     }
   }
 
+  async unarchiveMany(
+    workspaceId: string,
+    categoryIds: readonly string[],
+  ): Promise<Result<void, CategoryError>> {
+    if (categoryIds.length === 0) return ok(undefined);
+
+    try {
+      const supabase = await createServerClient();
+
+      const { error } = await supabase
+        .from("categories")
+        .update({ archived_at: null })
+        // Scoped by workspace as well as by id, for the same reason archiveMany is:
+        // RLS already blocks another workspace's rows, and leaning on that alone
+        // means a future policy change silently widens what this can touch.
+        .eq("workspace_id", workspaceId)
+        .in("id", [...categoryIds]);
+
+      if (error) return err(mapPostgresError(error));
+
+      return ok(undefined);
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
   async archiveMany(
     workspaceId: string,
     categoryIds: readonly string[],

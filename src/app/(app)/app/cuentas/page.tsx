@@ -2,29 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import type { AccountWithBalance } from "@/modules/accounts/application/ports/account-port";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
 import { AccountForm } from "@/modules/accounts/ui/components/account-form";
+import { AccountList } from "@/modules/accounts/ui/components/account-list";
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
-import { type Money, fromMinorUnits } from "@shared/domain/money";
-import { expectOk } from "@shared/domain/result";
-import { MoneyDisplay } from "@shared/ui/money-display";
 
+import { archiveAccountAction } from "./archive-account.action";
 import { createAccountAction } from "./create-account.action";
 
 export const metadata: Metadata = {
   title: "Cuentas — ez finance",
 };
-
-/**
- * A balance as Money. Same fallback as the dashboard: a currency the app never
- * writes means the row came from outside any app path, so one bad row shows zero
- * instead of taking the page down.
- */
-function accountMoney(account: AccountWithBalance): Money {
-  const money = fromMinorUnits(account.currency, account.balanceMinorUnits);
-  return money.ok ? money.value : expectOk(fromMinorUnits("PEN", 0n));
-}
 
 /**
  * Manage accounts.
@@ -71,32 +59,7 @@ export default async function AccountsPage() {
           No pudimos cargar tus cuentas. Intenta de nuevo en unos minutos.
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {accounts.value.map((account) => (
-            <li
-              key={account.id}
-              className="border-border flex items-baseline justify-between gap-3 rounded-md border px-3 py-3"
-            >
-              <span className="text-foreground text-sm">
-                {account.name}
-                {/*
-                  Archived accounts stay listed WITH their balance. The money is
-                  still there; a balance that disappeared on archive would be a lie.
-                */}
-                {account.archived && (
-                  <span className="text-muted-foreground ml-2 text-xs">
-                    archivada
-                  </span>
-                )}
-              </span>
-              <MoneyDisplay
-                amount={accountMoney(account)}
-                size="sm"
-                variant={account.balanceMinorUnits < 0n ? "expense" : "neutral"}
-              />
-            </li>
-          ))}
-        </ul>
+        <AccountList action={archiveAccountAction} accounts={accounts.value} />
       )}
 
       {/*

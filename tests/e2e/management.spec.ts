@@ -203,6 +203,27 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await expect(page.locator("#tx-category")).toContainText("Mascotas");
     await expect(page.locator("#tx-category")).not.toContainText("Ocio");
 
+    // --- and back again ----------------------------------------------------
+    // Archivar sits next to every row, so pressing it by accident is easy. Until
+    // unarchiveMany existed there was nothing to press afterwards: the button was a
+    // one-way door on a screen whose whole point is changing your mind.
+    await page.goto("/app/categorias");
+    await page.getByRole("button", { name: /restaurar ocio/i }).click();
+    await expect(
+      page.getByText(/«ocio» vuelve a estar disponible/i),
+    ).toBeVisible();
+
+    const restored = sql(
+      `select count(*) from ez_finance.categories
+       where workspace_id = '${workspaceId}'
+         and name = 'Ocio' and archived_at is null`,
+    );
+    expect(Number(restored), "archived_at cleared, not a new row").toBe(1);
+
+    // Offered again — the round trip is complete, not just recorded.
+    await page.goto("/app/movimientos/nuevo");
+    await expect(page.locator("#tx-category")).toContainText("Ocio");
+
     // === ACCOUNTS ==========================================================
     await page.goto("/app");
     await page.getByRole("link", { name: /cuentas/i }).click();
@@ -221,6 +242,15 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await page.fill("#account-balance", "250.75");
     await page.getByRole("button", { name: /continuar/i }).click();
 
+    // WAIT FOR AN OBSERVABLE EFFECT before reading the database. click() returns as
+    // soon as the click is dispatched, so querying straight afterwards races the
+    // server action — it passed by luck until this page grew a second client
+    // component and got slower to settle. The row appearing in the list is the
+    // effect, and asserting it is worth doing anyway.
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Yape" }),
+    ).toBeVisible();
+
     const stored = sql(
       `select type || '|' || currency || '|' || initial_balance
        from   ez_finance.accounts
@@ -236,7 +266,54 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await expect(page.getByText("Yape")).toBeVisible();
     await expect(page.getByText(/S\/\s*250\.75/).first()).toBeVisible();
 
+    // --- archive it, and prove the money did NOT move ----------------------
+    await page.goto("/app/cuentas");
+    await page.getByRole("button", { name: /archivar yape/i }).click();
+    await expect(page.getByText(/archivamos «yape»/i)).toBeVisible();
+
+    // THE BALANCE IS STILL ON SCREEN. A figure that vanished on archive would read
+    // as the app having lost the money, which is the worst thing a finance app can
+    // imply — so the row is marked, not hidden.
+    await expect(page.getByText(/S\/\s*250\.75/).first()).toBeVisible();
+    await expect(page.getByText(/archivada/i).first()).toBeVisible();
+
+    // Gone from the movement form, which is what archiving is FOR.
+    await page.goto("/app/movimientos/nuevo");
+    await expect(page.locator("#tx-account")).not.toContainText("Yape");
+    await expect(page.locator("#tx-account")).toContainText("Efectivo");
+
+    // --- restore it --------------------------------------------------------
+    await page.goto("/app/cuentas");
+    await page.getByRole("button", { name: /restaurar yape/i }).click();
+    await expect(
+      page.getByText(/«yape» vuelve a estar disponible/i),
+    ).toBeVisible();
+
+    await page.goto("/app/movimientos/nuevo");
+    await expect(page.locator("#tx-account")).toContainText("Yape");
+
+    // --- the last active account cannot be archived ------------------------
+    // Not a database rule; the schema permits it. But a workspace with every account
+    // archived has nowhere to record anything, and the screen that would explain the
+    // dead end is the one you can no longer act from. Refusing the step is kinder.
+    await page.goto("/app/cuentas");
+    await page.getByRole("button", { name: /archivar yape/i }).click();
+    await expect(page.getByText(/archivamos «yape»/i)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /archivar efectivo/i }),
+      "the only remaining active account offers no way to archive itself",
+    ).toBeDisabled();
+
+    // Put it back, so the rest of the walk has two accounts as before.
+    await page.getByRole("button", { name: /restaurar yape/i }).click();
+    await expect(
+      page.getByText(/«yape» vuelve a estar disponible/i),
+    ).toBeVisible();
+
     // === BUDGET ============================================================
+    // Back to the dashboard first: the accounts section ended on /app/cuentas, and
+    // the management links live on the dashboard.
+    await page.goto("/app");
     await page.getByRole("link", { name: /presupuesto/i }).click();
     await page.waitForURL(/\/app\/presupuesto/);
 

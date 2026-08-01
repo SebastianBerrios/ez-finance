@@ -9,6 +9,7 @@ import { CategoryManager } from "@/modules/categories/ui/components/category-man
 
 import { archiveCategoryAction } from "./archive-category.action";
 import { createCategoryAction } from "./create-category.action";
+import { restoreCategoryAction } from "./restore-category.action";
 
 export const metadata: Metadata = {
   title: "Categorías — ez finance",
@@ -60,6 +61,7 @@ export default async function CategoriesPage() {
         <>
           <CategoryManager
             action={archiveCategoryAction}
+            restoreAction={restoreCategoryAction}
             categories={listed.value}
           />
 
