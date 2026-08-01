@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 
-import type { Bucket } from "@shared/domain/budget-types";
+import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -23,12 +23,10 @@ interface CategoryCreatorProps {
 
 const initialState: CategoryCreatorState = {};
 
-/** Wording matches step 1, where these three shares were introduced. */
-const BUCKET_OPTIONS: readonly { value: Bucket; label: string }[] = [
-  { value: "need", label: "Necesidades primarias" },
-  { value: "want", label: "Caprichos" },
-  { value: "save", label: "Ahorro para el futuro" },
-];
+const BUCKET_OPTIONS = BUCKET_ORDER.map((value) => ({
+  value,
+  label: BUCKET_LABEL[value],
+}));
 
 /**
  * Add a category during setup.

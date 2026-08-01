@@ -15,6 +15,7 @@ import { MovementList } from "@/modules/transactions/ui/components/movement-list
 import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { type Money, fromMinorUnits } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
+import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { MoneyDisplay } from "@shared/ui/money-display";
 import { ThemeToggle } from "@shared/ui/theme-toggle";
 
@@ -149,21 +150,19 @@ export default async function AppPage() {
               </p>
             </section>
 
-            <BucketCard
-              label="Necesidades"
-              percentage={budget.value.percentages.need}
-              result={budget.value.result.buckets.need}
-            />
-            <BucketCard
-              label="Deseos"
-              percentage={budget.value.percentages.want}
-              result={budget.value.result.buckets.want}
-            />
-            <BucketCard
-              label="Ahorro"
-              percentage={budget.value.percentages.save}
-              result={budget.value.result.buckets.save}
-            />
+            {/*
+              Mapped rather than three hardcoded labels: these were the strings the
+              rest of the app was supposed to agree with, and being written here as
+              literals is how the setup screens drifted away from them.
+            */}
+            {BUCKET_ORDER.map((key) => (
+              <BucketCard
+                key={key}
+                label={BUCKET_LABEL[key]}
+                percentage={budget.value.percentages[key]}
+                result={budget.value.result.buckets[key]}
+              />
+            ))}
 
             {budget.value.result.alerts.length > 0 && (
               <section

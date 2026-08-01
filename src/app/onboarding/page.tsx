@@ -5,6 +5,11 @@ import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap"
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { SplitForm } from "@/modules/budget/ui/components/split-form";
 import { readOnboardingStatus } from "@/modules/onboarding/infrastructure/onboarding-status";
+import {
+  BUCKET_LABEL,
+  BUCKET_MEANING,
+  BUCKET_ORDER,
+} from "@shared/ui/bucket-labels";
 
 import { saveSplitAction } from "./save-split.action";
 
@@ -15,23 +20,16 @@ export const metadata: Metadata = {
 /** The method's namesake, and what the form starts at. */
 const DEFAULT_SPLIT = { need: 50, want: 30, save: 20 } as const;
 
-const BUCKETS: readonly { label: string; pct: number; what: string }[] = [
-  {
-    label: "Necesidades primarias",
-    pct: DEFAULT_SPLIT.need,
-    what: "lo que no puedes dejar de pagar",
-  },
-  {
-    label: "Caprichos",
-    pct: DEFAULT_SPLIT.want,
-    what: "lo que eliges porque quieres",
-  },
-  {
-    label: "Ahorro para el futuro",
-    pct: DEFAULT_SPLIT.save,
-    what: "lo que guardas o usas para salir de deudas",
-  },
-];
+/**
+ * Named from the shared labels, so the three shares taught here are spelled exactly
+ * as they appear on the dashboard the person lands on. They were not, and being
+ * introduced to "Caprichos" and then shown "Deseos" reads as two different things.
+ */
+const BUCKETS = BUCKET_ORDER.map((key) => ({
+  label: BUCKET_LABEL[key],
+  pct: DEFAULT_SPLIT[key],
+  what: BUCKET_MEANING[key],
+}));
 
 /**
  * Step 1 of the wizard: explain the method, then let the person set their split.
