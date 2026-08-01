@@ -84,8 +84,8 @@ export function AccountForm({ action, currencyLabel }: AccountFormProps) {
           ))}
         </select>
         <p id="account-type-hint" className="text-muted-foreground text-xs">
-          Si eliges <strong>Ahorro</strong>, lo que transfieras hacia esta cuenta
-          cuenta como ahorro del mes.
+          Si eliges <strong>Ahorro</strong>, lo que transfieras hacia esta
+          cuenta cuenta como ahorro del mes.
         </p>
       </div>
 

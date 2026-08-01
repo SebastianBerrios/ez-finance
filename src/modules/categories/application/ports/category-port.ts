@@ -60,4 +60,23 @@ export interface CategoryPort {
     workspaceId: string,
     categoryIds: readonly string[],
   ): Promise<Result<void, CategoryError>>;
+
+  /**
+   * Clear `archived_at`, putting the given categories back in circulation.
+   *
+   * The counterpart archiving needed from the start. Without it, archiving was a
+   * ONE-WAY door in a screen whose whole point is that you can change your mind —
+   * and the operation it undoes is the one people reach for by accident, because it
+   * sits next to every row.
+   *
+   * Restoring is NOT the inverse of a delete: the row never left, and the months it
+   * already counted in never stopped counting it. What changes is only whether it is
+   * offered for new movements again.
+   *
+   * An empty list is a no-op, matching archiveMany.
+   */
+  unarchiveMany(
+    workspaceId: string,
+    categoryIds: readonly string[],
+  ): Promise<Result<void, CategoryError>>;
 }

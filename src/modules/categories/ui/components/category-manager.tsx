@@ -17,12 +17,24 @@ type ArchiveActionFn = (
   formData: FormData,
 ) => Promise<ArchiveCategoryState>;
 
+export interface RestoreCategoryState {
+  error?: string;
+  restored?: string;
+}
+
+type RestoreActionFn = (
+  prev: RestoreCategoryState,
+  formData: FormData,
+) => Promise<RestoreCategoryState>;
+
 interface CategoryManagerProps {
   action: ArchiveActionFn;
+  restoreAction: RestoreActionFn;
   categories: readonly CategorySummary[];
 }
 
 const initialState: ArchiveCategoryState = {};
+const restoreInitialState: RestoreCategoryState = {};
 
 /**
  * The managed list: every active category, grouped by bucket, each with a way out.
@@ -38,8 +50,16 @@ const initialState: ArchiveCategoryState = {};
  * have transactions in — and someone who archived by mistake needs to see that it
  * happened.
  */
-export function CategoryManager({ action, categories }: CategoryManagerProps) {
+export function CategoryManager({
+  action,
+  restoreAction,
+  categories,
+}: CategoryManagerProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
+  const [restoreState, restoreFormAction, isRestoring] = useActionState(
+    restoreAction,
+    restoreInitialState,
+  );
 
   const active = categories.filter((category) => !category.archived);
   const archived = categories.filter((category) => category.archived);
@@ -148,6 +168,22 @@ export function CategoryManager({ action, categories }: CategoryManagerProps) {
         </section>
       )}
 
+      {restoreState.error !== undefined && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
+        >
+          {restoreState.error}
+        </div>
+      )}
+
+      {restoreState.restored !== undefined && (
+        <p aria-live="polite" className="text-muted-foreground text-sm">
+          «{restoreState.restored}» vuelve a estar disponible.
+        </p>
+      )}
+
       {archived.length > 0 && (
         <section className="flex flex-col gap-2">
           <h2 className="text-muted-foreground text-sm font-medium">
@@ -161,9 +197,32 @@ export function CategoryManager({ action, categories }: CategoryManagerProps) {
           {archived.map((category) => (
             <div
               key={category.id}
-              className="border-border/60 text-muted-foreground rounded-md border border-dashed px-3 py-2 text-sm"
+              className="border-border/60 text-muted-foreground flex items-center justify-between gap-3 rounded-md border border-dashed px-3 py-2 text-sm"
             >
-              {category.name}
+              <span>{category.name}</span>
+
+              {/*
+                The way back. Archivar sits next to every active row, so pressing it
+                by accident is easy — and until this existed there was nothing to
+                press afterwards.
+              */}
+              <form action={restoreFormAction}>
+                <input type="hidden" name="categoryId" value={category.id} />
+                <input
+                  type="hidden"
+                  name="categoryName"
+                  value={category.name}
+                />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="sm"
+                  disabled={isRestoring}
+                  aria-label={`Restaurar ${category.name}`}
+                >
+                  Restaurar
+                </Button>
+              </form>
             </div>
           ))}
         </section>

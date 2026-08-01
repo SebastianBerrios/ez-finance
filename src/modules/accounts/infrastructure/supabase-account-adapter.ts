@@ -103,6 +103,56 @@ export class SupabaseAccountAdapter implements AccountPort {
     }
   }
 
+  async archive(
+    workspaceId: string,
+    accountId: string,
+  ): Promise<Result<void, AccountError>> {
+    return this.setArchivedAt(workspaceId, accountId, new Date().toISOString());
+  }
+
+  async unarchive(
+    workspaceId: string,
+    accountId: string,
+  ): Promise<Result<void, AccountError>> {
+    return this.setArchivedAt(workspaceId, accountId, null);
+  }
+
+  /**
+   * The one write both archive and unarchive perform, differing only in the value.
+   *
+   * ZERO ROWS AFFECTED IS A FAILURE, and this is the whole reason it is a shared
+   * helper rather than two copies. RLS does not raise on a forbidden UPDATE — it
+   * filters the row out, so nothing changes and nothing errors, and a naive caller
+   * reads that as success. `count: "exact"` turns "no" into an answer instead of a
+   * silence, the same rule deleteMovement follows.
+   */
+  private async setArchivedAt(
+    workspaceId: string,
+    accountId: string,
+    value: string | null,
+  ): Promise<Result<void, AccountError>> {
+    try {
+      const supabase = await createServerClient();
+
+      const { error, count } = await supabase
+        .from("accounts")
+        .update({ archived_at: value }, { count: "exact" })
+        // Scoped by workspace as well as by id: RLS already blocks another
+        // workspace's rows, but leaning on that alone means a future policy change
+        // silently widens what this call can touch.
+        .eq("workspace_id", workspaceId)
+        .eq("id", accountId);
+
+      if (error) return err(mapPostgresError(error));
+
+      if (count === 0) return err({ kind: "NotPermitted" });
+
+      return ok(undefined);
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
   async listByWorkspace(
     workspaceId: string,
   ): Promise<Result<readonly AccountSummary[], AccountError>> {

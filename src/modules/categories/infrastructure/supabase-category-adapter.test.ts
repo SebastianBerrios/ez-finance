@@ -60,7 +60,9 @@ describe("SupabaseCategoryAdapter.listByWorkspace", () => {
     // The engine's documented unbucketed case — it must not be coerced into a
     // bucket on the way through.
     listReturning({
-      data: [{ id: "c3", name: "Sin clasificar", bucket: null, archived_at: null }],
+      data: [
+        { id: "c3", name: "Sin clasificar", bucket: null, archived_at: null },
+      ],
       error: null,
     });
 
@@ -123,7 +125,9 @@ describe("SupabaseCategoryAdapter.archiveMany", () => {
   it("maps an RLS refusal to NotPermitted", async () => {
     archiveReturning({ error: { code: "42501" } });
 
-    const result = await new SupabaseCategoryAdapter().archiveMany("ws-1", ["c1"]);
+    const result = await new SupabaseCategoryAdapter().archiveMany("ws-1", [
+      "c1",
+    ]);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("NotPermitted");
@@ -131,10 +135,15 @@ describe("SupabaseCategoryAdapter.archiveMany", () => {
 
   it("never leaks the backend message", async () => {
     archiveReturning({
-      error: { code: "23514", message: 'violates check constraint "categories_x"' },
+      error: {
+        code: "23514",
+        message: 'violates check constraint "categories_x"',
+      },
     });
 
-    const result = await new SupabaseCategoryAdapter().archiveMany("ws-1", ["c1"]);
+    const result = await new SupabaseCategoryAdapter().archiveMany("ws-1", [
+      "c1",
+    ]);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
