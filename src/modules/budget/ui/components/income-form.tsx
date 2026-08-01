@@ -33,6 +33,25 @@ const initialState: IncomeFormState = {};
 
 const MINOR_UNIT_EXPONENT = 2;
 
+/*
+ * NO INCOME-MODE QUESTION HERE, deliberately.
+ *
+ * This form used to also ask which income the engine should measure against —
+ * `mayor`, `real` or `esperado` — three options with consequences subtle enough
+ * that the answer was a coin flip for anyone who had not used the app yet.
+ *
+ * The default already does what almost everyone means. `mayor` resolves to
+ * max(income received, income expected), so someone who states their salary and
+ * later records extra earnings sees the buckets GROW when that money actually
+ * arrives, and never shrink below the salary. `real` would show 0 % until payday;
+ * `esperado` would ignore the extra. Neither is the common case.
+ *
+ * The engine still supports all three and income-resolver.test.ts still covers
+ * them; what is gone is asking during setup. A control for the minority who want
+ * another mode belongs in settings, and is NOT built yet — so today every
+ * workspace configured through this wizard is on `mayor`.
+ */
+
 const PREVIEW_ROWS = [
   { key: "need" as const, label: "Necesidades primarias" },
   { key: "want" as const, label: "Caprichos" },
@@ -64,35 +83,6 @@ function formatMinorUnits(minorUnits: bigint): string {
   return SOLES.format(Number(minorUnits) / 100);
 }
 
-/**
- * The engine's three IncomeMode values, with the consequence of each spelled out.
- *
- * This is the setting most likely to make someone think the dashboard is broken:
- * under "real" everything reads 0 % until money actually arrives. Saying so next
- * to the option is cheaper than explaining it later.
- */
-const INCOME_MODES: readonly {
-  value: string;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    value: "mayor",
-    label: "El mayor de los dos",
-    hint: "Usa el ingreso real si ya superó al esperado. Recomendado.",
-  },
-  {
-    value: "real",
-    label: "Solo lo que ya recibí",
-    hint: "Estricto: a inicio de mes verás todo en 0 %.",
-  },
-  {
-    value: "esperado",
-    label: "Siempre lo esperado",
-    hint: "Los cubos no se mueven aunque cobres antes o después.",
-  },
-];
-
 export function IncomeForm({
   action,
   currencyLabel,
@@ -120,7 +110,9 @@ export function IncomeForm({
       )}
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="expected-income">Ingreso del mes ({currencyLabel})</Label>
+        <Label htmlFor="expected-income">
+          Ingreso del mes ({currencyLabel})
+        </Label>
         <Input
           id="expected-income"
           name="expectedIncome"
@@ -165,33 +157,6 @@ export function IncomeForm({
           ))}
         </div>
       )}
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-foreground mb-2 text-sm font-medium">
-          ¿Qué ingreso usamos para el cálculo?
-        </legend>
-
-        {INCOME_MODES.map((mode, index) => (
-          <label
-            key={mode.value}
-            htmlFor={`income-mode-${mode.value}`}
-            className="border-border hover:bg-muted/40 flex cursor-pointer items-start gap-3 rounded-md border px-3 py-3 transition-colors"
-          >
-            <input
-              id={`income-mode-${mode.value}`}
-              type="radio"
-              name="incomeMode"
-              value={mode.value}
-              defaultChecked={index === 0}
-              className="accent-primary mt-0.5 h-4 w-4"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-foreground text-sm">{mode.label}</span>
-              <span className="text-muted-foreground text-xs">{mode.hint}</span>
-            </span>
-          </label>
-        ))}
-      </fieldset>
 
       <Button type="submit" disabled={isPending} className="w-full">
         {isPending ? "Guardando…" : submitLabel}

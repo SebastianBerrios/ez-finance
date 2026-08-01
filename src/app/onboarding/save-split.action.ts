@@ -51,7 +51,10 @@ export async function saveSplitAction(
   // Read before write, so an income already chosen survives a change of split.
   // A read FAILURE is not fatal here: it only means we cannot preserve an income
   // that may not exist yet, and the income step is still ahead.
-  const existing = await budget.findForMonth(entry.value.workspaceId, new Date());
+  const existing = await budget.findForMonth(
+    entry.value.workspaceId,
+    new Date(),
+  );
   const carried =
     existing.ok && existing.value !== null
       ? {
@@ -81,7 +84,8 @@ export async function saveSplitAction(
         return { error: "Los porcentajes tienen que ser enteros y sumar 100." };
       case "NotPermitted":
         return {
-          error: "No tienes permiso para editar el presupuesto de este espacio.",
+          error:
+            "No tienes permiso para editar el presupuesto de este espacio.",
         };
       case "WorkspaceNotFound":
         return { error: "No encontramos tu espacio financiero." };

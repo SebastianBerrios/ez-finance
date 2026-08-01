@@ -105,23 +105,16 @@ export default async function OnboardingWelcomePage() {
         ))}
       </ul>
 
-      <div className="border-border bg-muted/30 mt-6 rounded-lg border p-4">
+      <div className="border-border bg-muted/30 mt-4 mb-6 rounded-lg border p-4">
         <p className="text-foreground text-sm font-medium">
           Se mide sobre tu ingreso, no sobre tu gasto
         </p>
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          La pregunta que responde el panel es{" "}
-          <em>«¿cuánto del 50 % para necesidades ya usé?»</em>, no «¿qué parte de
-          mis gastos fue necesidad?». Por eso, si todavía no gastaste nada, tus
-          tres cubos arrancan en 0 %.
+          El panel responde <em>«¿cuánto del 50 % ya usé?»</em>, no «¿qué parte
+          de mis gastos fue necesidad?». Por eso arranca en 0 % hasta que
+          gastes.
         </p>
       </div>
-
-      <p className="text-muted-foreground mt-6 mb-6 text-sm leading-relaxed">
-        Estos son los porcentajes clásicos y ya están puestos. Si tu situación
-        pide otro reparto, cámbialos — solo tienen que sumar 100. Se puede ajustar
-        después.
-      </p>
 
       <SplitForm
         action={saveSplitAction}

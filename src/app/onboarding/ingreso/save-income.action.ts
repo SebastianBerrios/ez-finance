@@ -56,7 +56,10 @@ export async function saveIncomeAction(
   // Step 1 wrote the split. If it cannot be read we fall back to 50/30/20 rather
   // than refusing: an unreadable config would otherwise trap someone one step from
   // the end, and the method's own defaults are never a wrong answer.
-  const existing = await budget.findForMonth(entry.value.workspaceId, new Date());
+  const existing = await budget.findForMonth(
+    entry.value.workspaceId,
+    new Date(),
+  );
   const percentages =
     existing.ok && existing.value !== null
       ? existing.value.percentages
@@ -66,7 +69,12 @@ export async function saveIncomeAction(
     {
       workspaceId: entry.value.workspaceId,
       month: new Date(),
-      incomeMode: (formData.get("incomeMode") as string | null) ?? "mayor",
+      // Fixed, not read from the form: the wizard no longer asks. `mayor` is
+      // max(received, expected), which is what someone who states a salary and
+      // records extra earnings later actually wants — the buckets grow when the
+      // extra money arrives and never fall below the salary. See the note in
+      // income-form.tsx for why the question is gone.
+      incomeMode: "mayor",
       expectedIncomeMinorUnits: amount.value,
       percentages,
     },
@@ -76,15 +84,18 @@ export async function saveIncomeAction(
   if (!result.ok) {
     switch (result.error.kind) {
       case "InvalidConfig":
-        return { error: "Revisa el ingreso y el modo elegido." };
+        return { error: "Revisa el monto del ingreso." };
       case "NotPermitted":
         return {
-          error: "No tienes permiso para editar el presupuesto de este espacio.",
+          error:
+            "No tienes permiso para editar el presupuesto de este espacio.",
         };
       case "WorkspaceNotFound":
         return { error: "No encontramos tu espacio financiero." };
       default:
-        return { error: "No pudimos guardar tu presupuesto. Intenta de nuevo." };
+        return {
+          error: "No pudimos guardar tu presupuesto. Intenta de nuevo.",
+        };
     }
   }
 
