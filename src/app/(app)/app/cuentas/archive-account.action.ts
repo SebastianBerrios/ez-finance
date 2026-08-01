@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 
 export interface ArchiveAccountState {
   error?: string;
@@ -28,7 +28,7 @@ export async function archiveAccountAction(
   _prev: ArchiveAccountState,
   formData: FormData,
 ): Promise<ArchiveAccountState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }

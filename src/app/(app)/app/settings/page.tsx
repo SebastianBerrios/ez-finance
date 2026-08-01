@@ -84,7 +84,7 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-6">
           {settingsSections.map((section) => (
             <section key={section.title}>
-              <h2 className="text-muted-foreground mb-3 text-xs font-semibold uppercase tracking-widest">
+              <h2 className="text-muted-foreground mb-3 text-xs font-semibold tracking-widest uppercase">
                 {section.title}
               </h2>
               <div className="bg-card border-border rounded-xl border">

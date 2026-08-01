@@ -77,7 +77,10 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-07-25T12:00:00.000Z"));
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-  mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id: USER_ID } },
+    error: null,
+  });
   wireTables();
 });
 
@@ -93,7 +96,9 @@ describe("GET /app/settings/account/export", () => {
     const response = await GET(new Request(URL_UNDER_TEST));
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("http://localhost:3000/login");
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/login",
+    );
     expect(mockSchema).not.toHaveBeenCalled();
   });
 
@@ -144,7 +149,9 @@ describe("GET /app/settings/account/export", () => {
 
   it("leaks no provider detail when the read fails", async () => {
     wireTables({
-      profiles: { error: { message: "relation does not exist", code: "42P01" } },
+      profiles: {
+        error: { message: "relation does not exist", code: "42P01" },
+      },
     });
 
     const response = await GET(new Request(URL_UNDER_TEST));

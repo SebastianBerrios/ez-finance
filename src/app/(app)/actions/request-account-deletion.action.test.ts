@@ -57,7 +57,10 @@ async function run(confirm: string | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id: USER_ID } },
+    error: null,
+  });
   mockSignOut.mockResolvedValue({ error: null });
   mockRpc.mockResolvedValue({ data: WINDOW, error: null });
   mockRedirect.mockImplementation(() => {
@@ -119,7 +122,10 @@ describe("requestAccountDeletionAction", () => {
   });
 
   it("maps an expired session from the RPC to the session message", async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: "jwt_expired" } });
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: "jwt_expired" },
+    });
 
     const result = await run("ELIMINAR");
 

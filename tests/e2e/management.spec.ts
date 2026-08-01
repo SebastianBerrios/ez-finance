@@ -310,6 +310,71 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
       page.getByText(/«yape» vuelve a estar disponible/i),
     ).toBeVisible();
 
+    // === WORKSPACES ========================================================
+    // A second space is the point of Fase 3's first half: money that should not be
+    // averaged together, kept apart. What has to hold is ISOLATION.
+    await page.goto("/app");
+    await page.getByRole("link", { name: /espacios/i }).click();
+    await page.waitForURL(/\/app\/espacios/);
+
+    await expect(page.getByText(/estás aquí/i)).toBeVisible();
+
+    await page.getByText(/crear un espacio/i).click();
+    await page.fill("#workspace-name", "Negocio");
+    await page.getByRole("button", { name: /^crear$/i }).click();
+    await expect(page.getByText(/creamos «negocio»/i)).toBeVisible();
+
+    // Created as SHARED, never a second personal one. bootstrap() resolves the home
+    // workspace with `type = 'personal' ... limit 1`, so two would make that lookup
+    // arbitrary on every request — the invariant the SQL suite also pins.
+    const created = sql(
+      `select w.type from ez_finance.workspaces w
+       join   ez_finance.workspace_members m on m.workspace_id = w.id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and w.name = 'Negocio'`,
+    );
+    expect(
+      created,
+      "a created space is shared, not a second personal one",
+    ).toBe("shared");
+
+    // Creating switches you into it, and THE NEW SPACE IS EMPTY — not broken.
+    // Before this branch existed, an unconfigured space sent the dashboard to
+    // /onboarding, which bounced straight back because the PERSONAL workspace is
+    // complete. An infinite redirect loop, introduced by multi-workspace itself.
+    await page.goto("/app");
+    await expect(
+      page.getByText(/este espacio todavía está vacío/i),
+    ).toBeVisible();
+
+    // ISOLATION, the whole point: none of the personal space's data is here.
+    await expect(page.getByText("Yape")).toHaveCount(0);
+
+    // It did get its own starter categories, so it can bucket from day one — and
+    // NOT the one created in the other space.
+    await page.goto("/app/categorias");
+    await expect(
+      page.getByRole("heading", { name: /^necesidades$/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: /^mascotas$/i }),
+      "a category from the personal space must not appear here",
+    ).toHaveCount(0);
+
+    // Switch back, and the personal space is exactly as it was left.
+    await page.goto("/app/espacios");
+    await page.getByRole("button", { name: /cambiar a personal/i }).click();
+
+    // Wait for the switch to LAND before navigating — the same race that bit the
+    // account creation earlier in this file. The row for the current space shows
+    // "Estás aquí" instead of a button, so the button disappearing is the effect.
+    await expect(
+      page.getByRole("button", { name: /cambiar a personal/i }),
+    ).toHaveCount(0);
+
+    await page.goto("/app");
+    await expect(page.getByText("Yape")).toBeVisible();
+
     // === BUDGET ============================================================
     // Back to the dashboard first: the accounts section ended on /app/cuentas, and
     // the management links live on the dashboard.

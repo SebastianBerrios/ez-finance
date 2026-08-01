@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { recordTransaction } from "@/modules/transactions/application/record-transaction";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 import type { TransactionFormState } from "@/modules/transactions/ui/components/transaction-form";
@@ -16,7 +16,7 @@ export async function recordTransactionAction(
   formData: FormData,
 ): Promise<TransactionFormState> {
   const [entry, { user }] = await Promise.all([
-    bootstrapUserWorkspace(),
+    resolveCurrentWorkspace(),
     getAuthenticatedUser(),
   ]);
 
@@ -70,7 +70,8 @@ export async function recordTransactionAction(
         return { error: "Esa cuenta o categoría no es de este espacio." };
       case "NotPermitted":
         return {
-          error: "No tienes permiso para registrar movimientos en este espacio.",
+          error:
+            "No tienes permiso para registrar movimientos en este espacio.",
         };
       case "WorkspaceNotReady":
         return { error: "Primero crea una cuenta en tu espacio." };

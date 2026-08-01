@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
 import { CategoryCreator } from "@/modules/categories/ui/components/category-creator";
 import { CategoryManager } from "@/modules/categories/ui/components/category-manager";
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
  * archiveMany; what was missing was a door.
  */
 export default async function CategoriesPage() {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     redirect("/app");
   }
