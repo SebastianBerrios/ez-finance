@@ -2,6 +2,11 @@
 
 import { useActionState, useState } from "react";
 
+import {
+  BUCKET_EXAMPLES,
+  BUCKET_LABEL,
+  BUCKET_ORDER,
+} from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -24,31 +29,11 @@ interface SplitFormProps {
 
 const initialState: SplitFormState = {};
 
-/**
- * Labels match the explanation this form sits under, word for word.
- *
- * The dashboard's cards keep the shorter "Necesidades / Deseos / Ahorro" — a card
- * title has room for two words, not four. Here, where the concept is being taught
- * for the first time, the longer phrasing is the point: "Caprichos" tells someone
- * what the 30 % is for in a way "Deseos" does not.
- */
-const FIELDS = [
-  {
-    key: "need" as const,
-    label: "Necesidades primarias",
-    hint: "Alquiler, servicios, comida, transporte, salud.",
-  },
-  {
-    key: "want" as const,
-    label: "Caprichos",
-    hint: "Salidas, suscripciones, ropa, ocio.",
-  },
-  {
-    key: "save" as const,
-    label: "Ahorro para el futuro",
-    hint: "Lo que guardas o destinas a pagar deudas.",
-  },
-];
+const FIELDS = BUCKET_ORDER.map((key) => ({
+  key,
+  label: BUCKET_LABEL[key],
+  hint: BUCKET_EXAMPLES[key],
+}));
 
 /**
  * Whole numbers only, and only in 0–100. Matching the engine, which rejects a

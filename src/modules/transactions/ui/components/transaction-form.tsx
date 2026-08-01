@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 
+import type { Bucket } from "@shared/domain/budget-types";
+import { BUCKET_LABEL } from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -25,7 +27,13 @@ export interface AccountOption {
 export interface CategoryOption {
   readonly id: string;
   readonly name: string;
-  readonly bucket: string | null;
+  /**
+   * `Bucket`, not `string`. It was the looser type, which is what let this file
+   * carry its own label map keyed by string — and drift from the names every other
+   * screen used. The value has always come from CategorySummary, where it is
+   * already narrowed; null remains the engine's unbucketed case.
+   */
+  readonly bucket: Bucket | null;
   readonly archived: boolean;
 }
 
@@ -48,12 +56,6 @@ interface TransactionFormProps {
 }
 
 const initialState: TransactionFormState = {};
-
-const BUCKET_LABEL: Readonly<Record<string, string>> = {
-  need: "Necesidad",
-  want: "Deseo",
-  save: "Ahorro",
-};
 
 export function TransactionForm({
   action,

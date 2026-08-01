@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { parseAmountToMinorUnits } from "@shared/domain/money-input";
+import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
@@ -52,11 +53,10 @@ const MINOR_UNIT_EXPONENT = 2;
  * workspace configured through this wizard is on `mayor`.
  */
 
-const PREVIEW_ROWS = [
-  { key: "need" as const, label: "Necesidades primarias" },
-  { key: "want" as const, label: "Caprichos" },
-  { key: "save" as const, label: "Ahorro para el futuro" },
-];
+const PREVIEW_ROWS = BUCKET_ORDER.map((key) => ({
+  key,
+  label: BUCKET_LABEL[key],
+}));
 
 /**
  * A bucket's share, in minor units, floored — matching how the engine derives a

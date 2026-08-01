@@ -131,13 +131,14 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await expect(page).toHaveURL(/\/onboarding$/);
 
     // --- step 1 also TEACHES the method, which is the reason it comes first ---
-    // The three shares are named and quantified before anything is asked.
+    // The three shares are named and quantified before anything is asked, using the
+    // SAME words the dashboard will use — not a longer set invented for setup.
     await expect(
-      page.getByText(/necesidades primarias/i).first(),
+      page.getByText(/necesidades/i).first(),
     ).toBeVisible();
-    await expect(page.getByText(/caprichos/i).first()).toBeVisible();
+    await expect(page.getByText(/deseos/i).first()).toBeVisible();
     await expect(
-      page.getByText(/ahorro para el futuro/i).first(),
+      page.getByText(/ahorro/i).first(),
     ).toBeVisible();
     await expect(page.getByText(/se mide sobre tu ingreso/i)).toBeVisible();
 
@@ -350,7 +351,7 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     // The option text carries the bucket after the name, so the label must match
     // what is rendered rather than just the category name.
     await page.selectOption("#tx-category", {
-      label: "Supermercado · Necesidad",
+      label: "Supermercado · Necesidades",
     });
     await page.getByRole("button", { name: /registrar/i }).click();
     await page.waitForURL(/\/app$/);

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import type { CategorySummary } from "@/modules/categories/application/ports/category-port";
 import type { Bucket } from "@shared/domain/budget-types";
+import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
 
 export interface CategoryPickerState {
@@ -21,14 +22,6 @@ interface CategoryPickerProps {
 }
 
 const initialState: CategoryPickerState = {};
-
-const BUCKET_ORDER: readonly Bucket[] = ["need", "want", "save"];
-
-const BUCKET_LABEL: Readonly<Record<Bucket, string>> = {
-  need: "Necesidades",
-  want: "Deseos",
-  save: "Ahorro",
-};
 
 export function CategoryPicker({ action, categories }: CategoryPickerProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -48,7 +41,9 @@ export function CategoryPicker({ action, categories }: CategoryPickerProps) {
       )}
 
       {BUCKET_ORDER.map((bucket) => {
-        const inBucket = active.filter((category) => category.bucket === bucket);
+        const inBucket = active.filter(
+          (category) => category.bucket === bucket,
+        );
         if (inBucket.length === 0) return null;
 
         return (
