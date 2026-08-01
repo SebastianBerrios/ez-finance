@@ -264,6 +264,20 @@ export default async function AppPage() {
           Registrar movimiento
         </Link>
 
+        {/*
+          The management doors. Below the numbers because they are the exception —
+          you set your categories up once and then record against them for months.
+          Without these the app had no way to add a category or an account after
+          setup, and setup cannot be re-entered.
+        */}
+        <Link
+          href="/app/categorias"
+          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
+        >
+          <span className="text-sm font-medium">Categorías</span>
+          <span className="text-sm">›</span>
+        </Link>
+
         <Link
           href="/app/settings"
           className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
