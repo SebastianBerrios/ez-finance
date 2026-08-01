@@ -9,6 +9,7 @@ import { CategoryManager } from "@/modules/categories/ui/components/category-man
 
 import { archiveCategoryAction } from "./archive-category.action";
 import { createCategoryAction } from "./create-category.action";
+import { renameCategoryAction } from "./rename-category.action";
 import { restoreCategoryAction } from "./restore-category.action";
 
 export const metadata: Metadata = {
@@ -61,6 +62,7 @@ export default async function CategoriesPage() {
         <>
           <CategoryManager
             action={archiveCategoryAction}
+            renameAction={renameCategoryAction}
             restoreAction={restoreCategoryAction}
             categories={listed.value}
           />

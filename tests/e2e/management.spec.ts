@@ -174,6 +174,35 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     );
     expect(createdBucket, "stored in the bucket that was chosen").toBe("need");
 
+    // --- rename one --------------------------------------------------------
+    // The safest edit in the app: the row keeps its bucket and its transactions, so
+    // every past month reports exactly what it did before under a different label.
+    // That is why it is asserted by reading the ROW BACK — the id must not change.
+    const beforeRename = sql(
+      `select id from ez_finance.categories
+       where workspace_id = '${workspaceId}' and name = 'Supermercado'`,
+    );
+
+    await page
+      .getByRole("button", { name: /renombrar categoría supermercado/i })
+      .click();
+    await page.getByLabel(/nuevo nombre para supermercado/i).fill("Mercado");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+
+    // EXACT, because "Mercado" is a substring of "Supermercado": a loose match finds
+    // the row that has not been renamed yet, passes instantly, and the DB read below
+    // then races the server action. The wait has to be for something only the NEW name
+    // can satisfy.
+    await expect(page.getByText("Mercado", { exact: true })).toBeVisible();
+
+    const afterRename = sql(
+      `select id from ez_finance.categories
+       where workspace_id = '${workspaceId}' and name = 'Mercado'`,
+    );
+    expect(afterRename, "the same row, renamed — not a new one").toBe(
+      beforeRename,
+    );
+
     // --- archive one -------------------------------------------------------
     await page.getByRole("button", { name: /archivar ocio/i }).click();
 
@@ -266,10 +295,43 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await expect(page.getByText("Yape")).toBeVisible();
     await expect(page.getByText(/S\/\s*250\.75/).first()).toBeVisible();
 
+    // --- rename it, and prove the balance travelled with the name ----------
+    await page.goto("/app/cuentas");
+    await page.getByRole("button", { name: /renombrar cuenta yape/i }).click();
+    await page.getByLabel(/nuevo nombre para yape/i).fill("Yape personal");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Yape personal" }),
+    ).toBeVisible();
+
+    // Same row: the balance is still 250.75 and the type is untouched. Renaming must
+    // not be a create-and-delete, or the transactions would have nowhere to point.
+    const afterAccountRename = sql(
+      `select type || '|' || initial_balance
+       from   ez_finance.accounts
+       where  workspace_id = '${workspaceId}' and name = 'Yape personal'`,
+    );
+    expect(afterAccountRename).toBe("wallet|25075");
+
+    // Put the name back, so the assertions further down still read "Yape".
+    await page
+      .getByRole("button", { name: /renombrar cuenta yape personal/i })
+      .click();
+    await page.getByLabel(/nuevo nombre para yape personal/i).fill("Yape");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Yape" }),
+    ).toBeVisible();
+
     // --- archive it, and prove the money did NOT move ----------------------
     await page.goto("/app/cuentas");
     await page.getByRole("button", { name: /archivar yape/i }).click();
-    await expect(page.getByText(/archivamos «yape»/i)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /restaurar yape/i }),
+      "the row flips to offering a way back, which is durable state rather than a" +
+        " confirmation message that a later render can supersede",
+    ).toBeVisible();
 
     // THE BALANCE IS STILL ON SCREEN. A figure that vanished on archive would read
     // as the app having lost the money, which is the worst thing a finance app can
@@ -298,7 +360,11 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     // dead end is the one you can no longer act from. Refusing the step is kinder.
     await page.goto("/app/cuentas");
     await page.getByRole("button", { name: /archivar yape/i }).click();
-    await expect(page.getByText(/archivamos «yape»/i)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /restaurar yape/i }),
+      "the row flips to offering a way back, which is durable state rather than a" +
+        " confirmation message that a later render can supersede",
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /archivar efectivo/i }),
       "the only remaining active account offers no way to archive itself",

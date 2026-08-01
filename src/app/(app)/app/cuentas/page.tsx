@@ -9,6 +9,7 @@ import { AccountList } from "@/modules/accounts/ui/components/account-list";
 
 import { archiveAccountAction } from "./archive-account.action";
 import { createAccountAction } from "./create-account.action";
+import { renameAccountAction } from "./rename-account.action";
 
 export const metadata: Metadata = {
   title: "Cuentas — ez finance",
@@ -59,7 +60,11 @@ export default async function AccountsPage() {
           No pudimos cargar tus cuentas. Intenta de nuevo en unos minutos.
         </div>
       ) : (
-        <AccountList action={archiveAccountAction} accounts={accounts.value} />
+        <AccountList
+          action={archiveAccountAction}
+          renameAction={renameAccountAction}
+          accounts={accounts.value}
+        />
       )}
 
       {/*

@@ -10,6 +10,7 @@ function makePort(overrides: Partial<AccountPort> = {}): AccountPort {
     listWithBalances: vi.fn().mockResolvedValue({ ok: true, value: [] }),
     archive: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
     unarchive: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
+    rename: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
     ...overrides,
   };
 }

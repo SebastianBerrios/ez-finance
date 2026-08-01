@@ -7,6 +7,7 @@ import { type Money, fromMinorUnits } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 import { Button } from "@shared/ui/button";
 import { MoneyDisplay } from "@shared/ui/money-display";
+import { RenameInline, type RenameState } from "@shared/ui/rename-inline";
 
 export interface ArchiveAccountState {
   error?: string;
@@ -19,8 +20,14 @@ type ArchiveActionFn = (
   formData: FormData,
 ) => Promise<ArchiveAccountState>;
 
+type RenameActionFn = (
+  prev: RenameState,
+  formData: FormData,
+) => Promise<RenameState>;
+
 interface AccountListProps {
   action: ArchiveActionFn;
+  renameAction: RenameActionFn;
   accounts: readonly AccountWithBalance[];
 }
 
@@ -48,7 +55,11 @@ function accountMoney(account: AccountWithBalance): Money {
  * record a movement, and the form that would tell you so is the one you can no longer
  * reach anything from. Better to refuse the step than to explain the dead end.
  */
-export function AccountList({ action, accounts }: AccountListProps) {
+export function AccountList({
+  action,
+  renameAction,
+  accounts,
+}: AccountListProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
 
   const activeCount = accounts.filter((account) => !account.archived).length;
@@ -108,29 +119,44 @@ export function AccountList({ action, accounts }: AccountListProps) {
                 />
               </span>
 
-              <form action={formAction}>
-                <input type="hidden" name="accountId" value={account.id} />
-                <input type="hidden" name="accountName" value={account.name} />
-                <input
-                  type="hidden"
-                  name="intent"
-                  value={account.archived ? "restore" : "archive"}
+              <div className="flex items-center gap-1">
+                <RenameInline
+                  action={renameAction}
+                  idField="accountId"
+                  id={account.id}
+                  currentName={account.name}
+                  maxLength={80}
+                  thing="cuenta"
                 />
-                <Button
-                  type="submit"
-                  variant="ghost"
-                  size="sm"
-                  disabled={isPending || isLastActive}
-                  aria-label={`${account.archived ? "Restaurar" : "Archivar"} ${account.name}`}
-                  title={
-                    isLastActive
-                      ? "Es tu única cuenta activa: sin ninguna no podrías registrar movimientos."
-                      : undefined
-                  }
-                >
-                  {account.archived ? "Restaurar" : "Archivar"}
-                </Button>
-              </form>
+
+                <form action={formAction}>
+                  <input type="hidden" name="accountId" value={account.id} />
+                  <input
+                    type="hidden"
+                    name="accountName"
+                    value={account.name}
+                  />
+                  <input
+                    type="hidden"
+                    name="intent"
+                    value={account.archived ? "restore" : "archive"}
+                  />
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="sm"
+                    disabled={isPending || isLastActive}
+                    aria-label={`${account.archived ? "Restaurar" : "Archivar"} ${account.name}`}
+                    title={
+                      isLastActive
+                        ? "Es tu única cuenta activa: sin ninguna no podrías registrar movimientos."
+                        : undefined
+                    }
+                  >
+                    {account.archived ? "Restaurar" : "Archivar"}
+                  </Button>
+                </form>
+              </div>
             </li>
           );
         })}

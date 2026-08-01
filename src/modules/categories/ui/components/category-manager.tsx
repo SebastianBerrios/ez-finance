@@ -6,6 +6,7 @@ import type { CategorySummary } from "@/modules/categories/application/ports/cat
 import type { Bucket } from "@shared/domain/budget-types";
 import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { Button } from "@shared/ui/button";
+import { RenameInline, type RenameState } from "@shared/ui/rename-inline";
 
 export interface ArchiveCategoryState {
   error?: string;
@@ -27,8 +28,14 @@ type RestoreActionFn = (
   formData: FormData,
 ) => Promise<RestoreCategoryState>;
 
+type RenameActionFn = (
+  prev: RenameState,
+  formData: FormData,
+) => Promise<RenameState>;
+
 interface CategoryManagerProps {
   action: ArchiveActionFn;
+  renameAction: RenameActionFn;
   restoreAction: RestoreActionFn;
   categories: readonly CategorySummary[];
 }
@@ -53,6 +60,7 @@ const restoreInitialState: RestoreCategoryState = {};
 export function CategoryManager({
   action,
   restoreAction,
+  renameAction,
   categories,
 }: CategoryManagerProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -108,6 +116,15 @@ export function CategoryManager({
               >
                 <span className="text-foreground text-sm">{category.name}</span>
 
+                <RenameInline
+                  action={renameAction}
+                  idField="categoryId"
+                  id={category.id}
+                  currentName={category.name}
+                  maxLength={60}
+                  thing="categoría"
+                />
+
                 <form action={formAction}>
                   <input type="hidden" name="categoryId" value={category.id} />
                   <input
@@ -145,6 +162,15 @@ export function CategoryManager({
               className="border-border flex items-center justify-between gap-3 rounded-md border px-3 py-2"
             >
               <span className="text-foreground text-sm">{category.name}</span>
+
+              <RenameInline
+                action={renameAction}
+                idField="categoryId"
+                id={category.id}
+                currentName={category.name}
+                maxLength={60}
+                thing="categoría"
+              />
 
               <form action={formAction}>
                 <input type="hidden" name="categoryId" value={category.id} />
