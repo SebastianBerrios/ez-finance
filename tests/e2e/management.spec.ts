@@ -1,0 +1,300 @@
+// The management pages, walked in a browser: categories, accounts, budget.
+//
+// GATED on a live LOCAL stack, like the other data-touching specs.
+//
+// WHY THESE NEED AN E2E AT ALL. Every one of them exists because a use case had
+// exactly one caller and no door — so what is being tested is not the use cases
+// (unit tests cover those) but that the doors are REACHABLE from the dashboard, that
+// what they write lands in the database, and that the dashboard changes because of
+// it. A page that renders and saves nothing looks identical to one that works.
+import { execFileSync } from "node:child_process";
+
+import { type Page, expect, test } from "@playwright/test";
+
+const APP_SUPABASE_URL = process.env["E2E_SUPABASE_URL"] ?? "";
+const LIVE_LOCAL_STACK = /^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(
+  APP_SUPABASE_URL,
+);
+
+const PASSWORD = "Sup3rSecret!2026";
+const DB_CONTAINER = "supabase_db_ez-finance";
+
+function sql(statement: string): string {
+  return execFileSync(
+    "docker",
+    [
+      "exec",
+      DB_CONTAINER,
+      "psql",
+      "-U",
+      "postgres",
+      "-d",
+      "postgres",
+      "-t",
+      "-A",
+      "-c",
+      statement,
+    ],
+    { encoding: "utf8" },
+  ).trim();
+}
+
+const registered: string[] = [];
+
+function registerEmail(prefix: string): string {
+  const email = `${prefix}.${Date.now()}@test.local`;
+  registered.push(email);
+  return email;
+}
+
+function deleteFixtureAccounts(emails: string[]): void {
+  if (emails.length === 0) return;
+
+  const list = emails.map((email) => `'${email}'`).join(", ");
+  const ids = `select id from auth.users where email in (${list})`;
+  const workspaces = `
+    select w.id from ez_finance.workspaces w
+    join ez_finance.workspace_members m on m.workspace_id = w.id
+    where m.user_id in (${ids})`;
+
+  sql(
+    `delete from ez_finance.transactions   where workspace_id in (${workspaces});
+     delete from ez_finance.budget_configs where workspace_id in (${workspaces});
+     delete from ez_finance.accounts       where workspace_id in (${workspaces});
+     delete from ez_finance.categories     where workspace_id in (${workspaces});
+     delete from ez_finance.workspaces w
+     where exists (
+       select 1 from ez_finance.workspace_members m
+       where m.workspace_id = w.id and m.user_id in (${ids})
+     );
+     delete from ez_finance_private.deletion_requests where user_id in (${ids});
+     delete from ez_finance.profiles where id in (${ids});
+     delete from auth.users where email in (${list});`,
+  );
+}
+
+/** The workspace's id, for scoping assertions to this fixture only. */
+function workspaceIdOf(email: string): string {
+  return sql(
+    `select w.id
+     from   ez_finance.workspaces        w
+     join   ez_finance.workspace_members m on m.workspace_id = w.id
+     join   auth.users                   u on u.id = m.user_id
+     where  u.email = '${email}' and w.type = 'personal' and w.deleted_at is null`,
+  );
+}
+
+/**
+ * Arrive configured. These pages are about editing an existing setup, not about
+ * creating one — tests/e2e/onboarding.spec.ts owns the wizard.
+ *
+ * ORDER MATTERS, the same way it does in account-lifecycle.spec: the Personal
+ * workspace does not exist until bootstrap() runs in the (app) layout, i.e. not until
+ * this first sign-in. Seeding before that silently inserts nothing.
+ */
+async function signInConfigured(page: Page, email: string): Promise<void> {
+  sql(
+    `update auth.users set email_confirmed_at = now() where email = '${email}'`,
+  );
+
+  await page.context().clearCookies();
+  await page.goto("/login");
+  await page.getByLabel(/correo electrónico/i).fill(email);
+  await page
+    .getByLabel(/contraseña/i)
+    .first()
+    .fill(PASSWORD);
+  await page.getByRole("button", { name: /^ingresar/i }).click();
+  await page.waitForURL(/\/(app|onboarding)/);
+
+  const workspace = `(select '${workspaceIdOf(email)}'::uuid)`;
+
+  sql(
+    `insert into ez_finance.accounts (workspace_id, name, type, currency, initial_balance)
+     select ${workspace}, 'Efectivo', 'cash', 'PEN', 0;
+
+     insert into ez_finance.budget_configs
+       (workspace_id, effective_from, income_mode, expected_income, pct_need, pct_want, pct_save)
+     select ${workspace}, date_trunc('month', current_date)::date, 'mayor', 500000, 50, 30, 20
+     on conflict (workspace_id, effective_from) do nothing;`,
+  );
+
+  await page.goto("/app");
+  await page.waitForURL(/\/app$/);
+}
+
+test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
+  test.skip(
+    !LIVE_LOCAL_STACK,
+    "no local Supabase stack — run `supabase start`",
+  );
+
+  test.afterAll(() => {
+    deleteFixtureAccounts(registered.splice(0));
+  });
+
+  test("categories, accounts and the budget can all be changed after setup", async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+
+    const email = registerEmail("management");
+
+    await page.goto("/register");
+    await page.fill("#register-email", email);
+    await page.fill("#register-password", PASSWORD);
+    await page.click('button[type="submit"]');
+    await page.waitForURL(/\/check-email/);
+
+    await signInConfigured(page, email);
+    const workspaceId = workspaceIdOf(email);
+
+    // === CATEGORIES ========================================================
+    // Reachable from the dashboard. Before these pages existed the only route to
+    // any of this was a wizard that cannot be re-entered.
+    await page.getByRole("link", { name: /categorías/i }).click();
+    await page.waitForURL(/\/app\/categorias/);
+
+    // The eleven seeded ones, grouped under the SAME names the dashboard uses.
+    for (const heading of [/^necesidades$/i, /^deseos$/i, /^ahorro$/i]) {
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    }
+
+    // --- create one --------------------------------------------------------
+    await page.getByText(/agregar una categoría/i).click();
+    await page.fill("#category-name", "Mascotas");
+    await page.selectOption("#category-bucket", "need");
+    await page.getByRole("button", { name: /^agregar$/i }).click();
+
+    await expect(page.getByText(/agregamos «mascotas»/i)).toBeVisible();
+
+    const createdBucket = sql(
+      `select bucket from ez_finance.categories
+       where workspace_id = '${workspaceId}' and name = 'Mascotas'`,
+    );
+    expect(createdBucket, "stored in the bucket that was chosen").toBe("need");
+
+    // --- archive one -------------------------------------------------------
+    await page.getByRole("button", { name: /archivar ocio/i }).click();
+
+    // The confirmation says what archiving does NOT do, because the fear on
+    // pressing it is that past months will change.
+    await expect(page.getByText(/archivamos «ocio»/i)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /^archivadas$/i }),
+    ).toBeVisible();
+
+    const archived = sql(
+      `select count(*) from ez_finance.categories
+       where workspace_id = '${workspaceId}'
+         and name = 'Ocio' and archived_at is not null`,
+    );
+    expect(Number(archived), "archived, not deleted").toBe(1);
+
+    const stillThere = sql(
+      `select count(*) from ez_finance.categories
+       where workspace_id = '${workspaceId}' and name = 'Ocio'`,
+    );
+    expect(Number(stillThere), "the row survives, so history does").toBe(1);
+
+    // An archived category is no longer offered for NEW movements. This is the
+    // assertion that proves archiving means something beyond a label.
+    await page.goto("/app/movimientos/nuevo");
+    await expect(page.locator("#tx-category")).toContainText("Mascotas");
+    await expect(page.locator("#tx-category")).not.toContainText("Ocio");
+
+    // === ACCOUNTS ==========================================================
+    await page.goto("/app");
+    await page.getByRole("link", { name: /cuentas/i }).click();
+    await page.waitForURL(/\/app\/cuentas/);
+
+    // Scoped to the LIST. Plain getByText("Efectivo") also matches the account-type
+    // dropdown's <option value="cash">Efectivo</option> further down the page — the
+    // seeded account and one of the type choices happen to share a word.
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Efectivo" }),
+    ).toBeVisible();
+
+    await page.getByText(/agregar una cuenta/i).click();
+    await page.fill("#account-name", "Yape");
+    await page.selectOption("#account-type", "wallet");
+    await page.fill("#account-balance", "250.75");
+    await page.getByRole("button", { name: /continuar/i }).click();
+
+    const stored = sql(
+      `select type || '|' || currency || '|' || initial_balance
+       from   ez_finance.accounts
+       where  workspace_id = '${workspaceId}' and name = 'Yape'`,
+    );
+    // The currency is NOT asked for — the workspace's base currency is immutable —
+    // so this asserts it was supplied correctly rather than left blank.
+    expect(stored).toBe("wallet|PEN|25075");
+
+    // And the dashboard sees it, because a second account that only exists on its
+    // own page would be useless for recording against.
+    await page.goto("/app");
+    await expect(page.getByText("Yape")).toBeVisible();
+    await expect(page.getByText(/S\/\s*250\.75/).first()).toBeVisible();
+
+    // === BUDGET ============================================================
+    await page.getByRole("link", { name: /presupuesto/i }).click();
+    await page.waitForURL(/\/app\/presupuesto/);
+
+    // Pre-filled from what is stored — an edit, not a re-entry.
+    await expect(page.locator("#expected-income")).toHaveValue("5000");
+    await expect(page.locator("#split-need")).toHaveValue("50");
+
+    await page.fill("#expected-income", "4000");
+    await page.fill("#split-need", "70");
+    await page.fill("#split-want", "20");
+    await page.fill("#split-save", "10");
+    await expect(page.getByText(/suman 100 %/i)).toBeVisible();
+
+    // The preview computes before saving: 70 % of 4000 is 2800.
+    await expect(page.getByText(/S\/\s*2[.,]800\.00/).first()).toBeVisible();
+
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+    await expect(page.getByText(/guardado/i)).toBeVisible();
+
+    const savedConfig = sql(
+      `select expected_income || '|' || income_mode || '|'
+              || pct_need || '/' || pct_want || '/' || pct_save
+       from   ez_finance.budget_configs
+       where  workspace_id = '${workspaceId}'`,
+    );
+    expect(savedConfig).toBe("400000|mayor|70/20/10");
+
+    // THE POINT OF THE WHOLE PAGE: the dashboard recomputes from the edit.
+    await page.goto("/app");
+    await expect(page.getByText("70%")).toBeVisible();
+    await expect(page.getByText(/S\/\s*2[.,]800\.00/).first()).toBeVisible();
+
+    // --- and the income mode is reachable again ----------------------------
+    // This is the coverage that was lost when the mode question left the wizard:
+    // "real" counts only money already received, and no income has been recorded,
+    // so every target must fall to zero. It proves the radio still travels all the
+    // way into computeBudget.
+    await page.goto("/app/presupuesto");
+    await page.check("#income-mode-real");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+    await expect(page.getByText(/guardado/i)).toBeVisible();
+
+    await page.goto("/app");
+    await expect(page.getByText(/S\/\s*0\.00/).first()).toBeVisible();
+
+    const bars = page.getByRole("progressbar");
+    await expect(bars).toHaveCount(3);
+    for (let index = 0; index < 3; index++) {
+      await expect(bars.nth(index)).toHaveAttribute("aria-valuenow", "0");
+    }
+
+    // The stored expected income is untouched — the zeroes are the mode's doing,
+    // not lost data.
+    const afterMode = sql(
+      `select expected_income || '|' || income_mode
+       from   ez_finance.budget_configs
+       where  workspace_id = '${workspaceId}'`,
+    );
+    expect(afterMode).toBe("400000|real");
+  });
+});
