@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
+import { CategoryCreator } from "@/modules/categories/ui/components/category-creator";
 import { CategoryPicker } from "@/modules/categories/ui/components/category-picker";
 
+import { createCategoryAction } from "./create-category.action";
 import { keepCategoriesAction } from "./keep-categories.action";
 
 export const metadata: Metadata = {
@@ -37,14 +39,18 @@ export default async function OnboardingCategoriesPage() {
       </h1>
 
       <p className="text-muted-foreground mt-2 mb-6 text-sm leading-relaxed">
-        Las preparamos para empezar rápido. Desmarca las que no vayas a usar —
-        puedes crear las tuyas más adelante.
+        Las preparamos para empezar rápido. Desmarca las que no vayas a usar, y
+        agrega las que te falten.
       </p>
 
-      <CategoryPicker
-        action={keepCategoriesAction}
-        categories={listed.value}
-      />
+      <CategoryPicker action={keepCategoriesAction} categories={listed.value} />
+
+      {/*
+        BELOW the list and the Continuar button, because adding is the exception and
+        continuing is the common case. The creator revalidates this route rather than
+        navigating, so anything added appears in the list above, already checked.
+      */}
+      <CategoryCreator action={createCategoryAction} />
     </div>
   );
 }

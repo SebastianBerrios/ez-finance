@@ -5,8 +5,10 @@
 import type {
   CategoryError,
   CategoryPort,
+  CategoryRef,
   CategorySummary,
 } from "@/modules/categories/application/ports/category-port";
+import type { CategoryDraft } from "@/modules/categories/domain/category-draft";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 import type { Bucket } from "@shared/domain/budget-types";
 import { err, ok, type Result } from "@shared/domain/result";
@@ -46,6 +48,35 @@ function toSummary(row: CategoryRow): CategorySummary {
 }
 
 export class SupabaseCategoryAdapter implements CategoryPort {
+  async create(
+    workspaceId: string,
+    draft: CategoryDraft,
+  ): Promise<Result<CategoryRef, CategoryError>> {
+    try {
+      const supabase = await createServerClient();
+
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({
+          workspace_id: workspaceId,
+          name: draft.name,
+          bucket: draft.bucket,
+        })
+        .select("id")
+        .single();
+
+      if (error) return err(mapPostgresError(error));
+
+      // A successful insert that returned no row would mean the id is unknown while
+      // the row exists. Reporting Unavailable is honest; inventing an id is not.
+      if (data === null) return err({ kind: "Unavailable" });
+
+      return ok({ id: (data as { id: string }).id });
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
   async listByWorkspace(
     workspaceId: string,
   ): Promise<Result<readonly CategorySummary[], CategoryError>> {
