@@ -181,6 +181,19 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await page.waitForURL(/\/onboarding\/categorias/);
     await expect(page.getByText(/estas son tus categorías/i)).toBeVisible();
 
+    // ADD one of your own. Until this existed the eleven seeded categories were the
+    // only ones a workspace could ever have, so anyone who unchecked most of them —
+    // or whose workspace predated the seed — had buckets that could never fill.
+    await page.getByText(/agregar una categoría/i).click();
+    await page.fill("#category-name", "Mascotas");
+    await page.selectOption("#category-bucket", "need");
+    await page.getByRole("button", { name: /^agregar$/i }).click();
+
+    // It comes back in the list above, already checked — the step revalidates rather
+    // than navigating, so adding several in a row does not leave the page.
+    const mascotas = page.getByRole("checkbox", { name: /^mascotas$/i });
+    await expect(mascotas).toBeChecked();
+
     // Drop exactly one, to prove the choice is honoured rather than decorative.
     const ocio = page.getByRole("checkbox", { name: /^ocio$/i });
     await expect(ocio).toBeChecked();
@@ -247,7 +260,10 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
        join   auth.users u on u.id = m.user_id
        where  u.email = '${email}' and c.archived_at is null`,
     );
-    expect(Number(stillActive), "the other ten were kept").toBe(10);
+    expect(
+      Number(stillActive),
+      "the other ten seeded, plus the one just created",
+    ).toBe(11);
 
     // --- and the dashboard COMPUTES from it --------------------------------
     // The whole point of the wizard: what it stored is what the engine reads.
