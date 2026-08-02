@@ -48,18 +48,15 @@ function percent(saved: bigint, target: bigint): number {
 export function GoalList({ action, goals, currency }: GoalListProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  if (goals.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        Todavía no tienes metas. Una meta es un monto al que quieres llegar en
-        una cuenta de ahorro — el progreso sale del saldo real de esa cuenta, no
-        de un número aparte.
-      </p>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-3">
+      {/*
+        THE MESSAGES RENDER BEFORE THE EMPTY STATE, not after, and that ordering is the
+        fix for a real fault: archiving your ONLY goal empties the list, so an early
+        return for "no goals" swallowed the confirmation at exactly the moment it
+        mattered — you pressed Archivar, the goal vanished, and nothing said why or
+        reassured you the money was untouched.
+      */}
       {state.error !== undefined && (
         <div
           role="alert"
@@ -73,6 +70,14 @@ export function GoalList({ action, goals, currency }: GoalListProps) {
       {state.archived !== undefined && (
         <p aria-live="polite" className="text-muted-foreground text-sm">
           Archivamos «{state.archived}». El dinero sigue en su cuenta.
+        </p>
+      )}
+
+      {goals.length === 0 && (
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          Todavía no tienes metas. Una meta es un monto al que quieres llegar en
+          una cuenta de ahorro — el progreso sale del saldo real de esa cuenta,
+          no de un número aparte.
         </p>
       )}
 

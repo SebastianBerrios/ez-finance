@@ -58,7 +58,12 @@ function deleteFixtureAccounts(emails: string[]): void {
     where m.user_id in (${ids})`;
 
   sql(
-    `delete from ez_finance.transactions   where workspace_id in (${workspaces});
+    // GOALS FIRST. goals.account_id is ON DELETE RESTRICT, so an account cannot go
+    // while a goal still points at it. That restriction is deliberate — deleting an
+    // account a goal measures should fail loudly rather than silently take the goal —
+    // which makes unwinding in the right order the teardown's job, not the schema's.
+    `delete from ez_finance.goals           where workspace_id in (${workspaces});
+     delete from ez_finance.transactions   where workspace_id in (${workspaces});
      delete from ez_finance.budget_configs where workspace_id in (${workspaces});
      delete from ez_finance.accounts       where workspace_id in (${workspaces});
      delete from ez_finance.categories     where workspace_id in (${workspaces});
