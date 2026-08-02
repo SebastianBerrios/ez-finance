@@ -376,6 +376,74 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
       page.getByText(/«yape» vuelve a estar disponible/i),
     ).toBeVisible();
 
+    // === GOALS =============================================================
+    // The property that matters: PROGRESS IS DERIVED. There is no saved_amount column,
+    // so a goal can only be right if it is reading the account behind it.
+    await page.goto("/app");
+    await page.getByRole("link", { name: /metas/i }).click();
+    await page.waitForURL(/\/app\/metas/);
+
+    // No savings account yet, so the page says what is missing instead of offering an
+    // empty picker. Efectivo is cash and Yape is a wallet — neither qualifies.
+    await expect(page.getByText(/necesitas una cuenta de tipo/i)).toBeVisible();
+
+    // Create one, with a known opening balance.
+    await page.goto("/app/cuentas");
+    await page.getByText(/agregar una cuenta/i).click();
+    await page.fill("#account-name", "Fondo viaje");
+    await page.selectOption("#account-type", "savings");
+    await page.fill("#account-balance", "400");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Fondo viaje" }),
+    ).toBeVisible();
+
+    await page.goto("/app/metas");
+    await page.getByText(/crear una meta/i).click();
+    await page.fill("#goal-name", "Viaje");
+    await page.fill("#goal-target", "1000");
+    await page.selectOption("#goal-account", { label: "Fondo viaje" });
+    await page.getByRole("button", { name: /^crear$/i }).click();
+
+    await expect(page.getByText(/creamos «viaje»/i)).toBeVisible();
+
+    // 400 of 1000 = 40 %, read from the ACCOUNT — nothing wrote a progress figure.
+    await expect(page.getByText(/S\/\s*400\.00/).first()).toBeVisible();
+    await expect(
+      page.getByRole("progressbar", { name: /progreso de viaje/i }),
+    ).toHaveAttribute("aria-valuenow", "40");
+
+    // Recording income into that account MOVES the goal, with nothing else written.
+    await page.goto("/app/movimientos/nuevo");
+    await page.locator('label[for="kind-income"]').click();
+    await page.fill("#tx-amount", "600");
+    await page.selectOption("#tx-account", { label: "Fondo viaje" });
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    await page.goto("/app/metas");
+    await expect(
+      page.getByRole("progressbar", { name: /progreso de viaje/i }),
+    ).toHaveAttribute("aria-valuenow", "100");
+    await expect(page.getByText(/llegaste/i)).toBeVisible();
+
+    // Archiving the goal must NOT touch the money — the fear the confirmation answers.
+    const balanceBefore = sql(
+      `select balance from ez_finance.account_balances('${workspaceId}') b
+       join ez_finance.accounts a on a.id = b.account_id
+       where a.name = 'Fondo viaje'`,
+    );
+
+    await page.getByRole("button", { name: /archivar meta viaje/i }).click();
+    await expect(page.getByText(/el dinero sigue en su cuenta/i)).toBeVisible();
+
+    const balanceAfter = sql(
+      `select balance from ez_finance.account_balances('${workspaceId}') b
+       join ez_finance.accounts a on a.id = b.account_id
+       where a.name = 'Fondo viaje'`,
+    );
+    expect(balanceAfter, "archiving a goal moves no money").toBe(balanceBefore);
+
     // === WORKSPACES ========================================================
     // A second space is the point of Fase 3's first half: money that should not be
     // averaged together, kept apart. What has to hold is ISOLATION.
