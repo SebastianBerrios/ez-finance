@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
 
 export interface ArchiveCategoryState {
@@ -27,7 +27,7 @@ export async function archiveCategoryAction(
   _prev: ArchiveCategoryState,
   formData: FormData,
 ): Promise<ArchiveCategoryState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }

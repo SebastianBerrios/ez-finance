@@ -24,7 +24,10 @@ const USER_ID = "11111111-1111-4111-8111-111111111111";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id: USER_ID } },
+    error: null,
+  });
   mockRpc.mockResolvedValue({ data: null, error: null });
 });
 
@@ -51,12 +54,17 @@ describe("cancelAccountDeletionAction", () => {
 
     const state = await cancelAccountDeletionAction({}, new FormData());
 
-    expect(state.error).toMatch(/el plazo venció o no hay una eliminación pendiente/i);
+    expect(state.error).toMatch(
+      /el plazo venció o no hay una eliminación pendiente/i,
+    );
     expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 
   it("maps an expired session from the RPC to the session message", async () => {
-    mockRpc.mockResolvedValue({ data: null, error: { message: "jwt_expired" } });
+    mockRpc.mockResolvedValue({
+      data: null,
+      error: { message: "jwt_expired" },
+    });
 
     const state = await cancelAccountDeletionAction({}, new FormData());
 

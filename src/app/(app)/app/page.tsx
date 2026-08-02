@@ -2,9 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logoutAction } from "@/app/(app)/actions/logout.action";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import type { AccountWithBalance } from "@/modules/accounts/application/ports/account-port";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { LogoutButton } from "@/modules/auth/ui/components/logout-button";
 import { getMonthlyBudget } from "@/modules/budget/application/get-monthly-budget";
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
@@ -58,7 +58,7 @@ const MONTH_NAMES = [
  * through drift — so that case gets its own message instead of an empty screen.
  */
 export default async function AppPage() {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     // The layout resolves both of these; arriving here means it changed under us.
     redirect("/app/settings");
@@ -87,9 +87,19 @@ export default async function AppPage() {
     },
   );
 
-  // NotConfigured should be unreachable — the layout's gate exists to prevent it —
-  // but if the two ever disagree, the wizard is the only place that can fix it.
-  if (!budget.ok && budget.error.kind === "NotConfigured") {
+  // NotConfigured means two completely different things now, and conflating them is
+  // an INFINITE REDIRECT LOOP — one this very change introduced and this line stops.
+  //
+  // On the personal space it is the old case: the gate and the data disagree, and the
+  // wizard is the only thing that can rebuild a config from nothing.
+  //
+  // On a space you just created it is simply the truth — it has no accounts and no
+  // budget yet. Sending that to /onboarding bounces straight back, because the wizard
+  // root checks the PERSONAL workspace, finds it complete, and redirects to /app,
+  // which lands here again. The browser gives up before either page does.
+  const needsSetup = !budget.ok && budget.error.kind === "NotConfigured";
+
+  if (needsSetup && entry.value.isPersonal) {
     redirect("/onboarding");
   }
 
@@ -115,7 +125,36 @@ export default async function AppPage() {
           </h1>
         </div>
 
-        {!budget.ok ? (
+        {needsSetup ? (
+          /*
+            A new space, not a broken one. It says what is missing and links to the two
+            screens that fix it, in the order they have to happen: the account fixes
+            the currency, the budget needs an income to divide.
+          */
+          <section className="bg-card border-border flex flex-col gap-3 rounded-xl border p-5">
+            <p className="text-foreground text-sm font-medium">
+              Este espacio todavía está vacío
+            </p>
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              Cada espacio tiene su propio presupuesto. Agrega una cuenta y
+              define cuánto esperas recibir para que aparezcan tus cubos.
+            </p>
+            <div className="mt-1 flex flex-col gap-2">
+              <Link
+                href="/app/cuentas"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center justify-center rounded-md px-4 py-3 text-sm font-medium transition-colors"
+              >
+                Agregar una cuenta
+              </Link>
+              <Link
+                href="/app/presupuesto"
+                className="border-border text-foreground hover:bg-muted/40 flex items-center justify-center rounded-md border px-4 py-3 text-sm font-medium transition-colors"
+              >
+                Definir el presupuesto
+              </Link>
+            </div>
+          </section>
+        ) : !budget.ok ? (
           <div
             role="alert"
             className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
@@ -270,6 +309,14 @@ export default async function AppPage() {
           Without these the app had no way to add a category or an account after
           setup, and setup cannot be re-entered.
         */}
+        <Link
+          href="/app/espacios"
+          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
+        >
+          <span className="text-sm font-medium">Espacios</span>
+          <span className="text-sm">›</span>
+        </Link>
+
         <Link
           href="/app/presupuesto"
           className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"

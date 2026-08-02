@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
 import { AccountForm } from "@/modules/accounts/ui/components/account-form";
 import { AccountList } from "@/modules/accounts/ui/components/account-list";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 
 import { archiveAccountAction } from "./archive-account.action";
 import { createAccountAction } from "./create-account.action";
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
  * account holds.
  */
 export default async function AccountsPage() {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     redirect("/app");
   }

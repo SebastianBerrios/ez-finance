@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { BudgetForm } from "@/modules/budget/ui/components/budget-form";
 
@@ -27,23 +27,39 @@ export const metadata: Metadata = {
  * lived. Raising your expected income today does not re-scale March.
  */
 export default async function BudgetPage() {
-  const entry = await bootstrapUserWorkspace();
-  if (!entry.ok || entry.value.kind !== "READY") {
+  const current = await resolveCurrentWorkspace();
+  if (!current.ok || current.value.kind !== "READY") {
     redirect("/app");
   }
 
   const existing = await new SupabaseBudgetConfigAdapter().findForMonth(
-    entry.value.workspaceId,
+    current.value.workspaceId,
     new Date(),
   );
 
-  // No config and an unreadable config are different things. The first cannot happen
-  // on this page — the (app) gate requires a configured workspace to get here — so
-  // reaching either case means something is wrong rather than unfinished, and the
-  // wizard is the only place that can rebuild it.
-  if (!existing.ok || existing.value === null) {
+  // THREE CASES, and they used to be one redirect.
+  //
+  // Unreadable: something is wrong. The wizard can rebuild a config from nothing, so
+  // that is where an unreadable one goes.
+  if (!existing.ok) {
     redirect("/onboarding");
   }
+
+  // Missing on the PERSONAL space: the gate and the data disagree, same as before.
+  if (existing.value === null && current.value.isPersonal) {
+    redirect("/onboarding");
+  }
+
+  // Missing on a space you just created: not an error, just an unanswered question —
+  // and THIS page is the place that answers it. Redirecting here would bounce off the
+  // wizard root, which checks the personal workspace, finds it complete and sends you
+  // back: an infinite loop. So the form opens on the method's own defaults and the
+  // first save creates the row.
+  const initial = existing.value ?? {
+    percentages: { need: 50, want: 30, save: 20 },
+    expectedIncomeMinorUnits: 0n,
+    incomeMode: "mayor",
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-6">
@@ -64,11 +80,7 @@ export default async function BudgetPage() {
       <BudgetForm
         action={saveBudgetAction}
         currencyLabel="soles"
-        initial={{
-          percentages: existing.value.percentages,
-          expectedIncomeMinorUnits: existing.value.expectedIncomeMinorUnits,
-          incomeMode: existing.value.incomeMode,
-        }}
+        initial={initial}
       />
     </main>
   );

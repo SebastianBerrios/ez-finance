@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
 import { TransactionForm } from "@/modules/transactions/ui/components/transaction-form";
 
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function NewTransactionPage() {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     redirect("/app");
   }

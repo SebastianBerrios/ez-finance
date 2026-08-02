@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { createCategory } from "@/modules/categories/application/create-category";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
 
@@ -23,7 +23,7 @@ export async function createCategoryAction(
   _prev: CreateCategoryState,
   formData: FormData,
 ): Promise<CreateCategoryState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }

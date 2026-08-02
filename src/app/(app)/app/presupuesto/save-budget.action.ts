@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { saveBudgetConfig } from "@/modules/budget/application/save-budget-config";
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { parseAmountToMinorUnits } from "@shared/domain/money-input";
@@ -40,7 +40,7 @@ export async function saveBudgetAction(
   _prev: BudgetFormState,
   formData: FormData,
 ): Promise<BudgetFormState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }

@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { createAccount } from "@/modules/accounts/application/create-account";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { parseAmountToMinorUnits } from "@shared/domain/money-input";
 
 export interface AccountFormState {
@@ -29,7 +29,7 @@ export async function createAccountAction(
   _prev: AccountFormState,
   formData: FormData,
 ): Promise<AccountFormState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }

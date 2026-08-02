@@ -31,6 +31,16 @@ export const dynamic = "force-dynamic";
  * session simply makes this a no-op.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
+  // DELIBERATELY bootstrapUserWorkspace() AND NOT resolveCurrentWorkspace(), even
+  // though every page below this one uses the resolver. Do not "make it consistent".
+  //
+  // The gate asks whether the WIZARD finished, and the wizard configures the personal
+  // anchor. Asking it about the currently selected space instead would send anyone who
+  // just created an empty one to /onboarding — where the root checks the personal
+  // workspace, finds it complete, and redirects back here. An infinite loop.
+  //
+  // An empty non-personal space is not a half-finished setup; it is a new space, and
+  // the dashboard renders it as such.
   const entry = await bootstrapUserWorkspace();
 
   if (!entry.ok) {

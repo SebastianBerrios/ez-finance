@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
+import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { deleteMovement } from "@/modules/transactions/application/delete-movement";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 
@@ -14,7 +14,7 @@ export async function deleteMovementAction(
   _prev: DeleteMovementState,
   formData: FormData,
 ): Promise<DeleteMovementState> {
-  const entry = await bootstrapUserWorkspace();
+  const entry = await resolveCurrentWorkspace();
   if (!entry.ok || entry.value.kind !== "READY") {
     return { error: "Sesión expirada. Por favor ingresa de nuevo." };
   }
