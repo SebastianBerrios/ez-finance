@@ -62,7 +62,8 @@ function deleteFixtureAccounts(emails: string[]): void {
     // while a goal still points at it. That restriction is deliberate — deleting an
     // account a goal measures should fail loudly rather than silently take the goal —
     // which makes unwinding in the right order the teardown's job, not the schema's.
-    `delete from ez_finance.goals           where workspace_id in (${workspaces});
+    `delete from ez_finance.scheduled_transactions where workspace_id in (${workspaces});
+     delete from ez_finance.goals           where workspace_id in (${workspaces});
      delete from ez_finance.transactions   where workspace_id in (${workspaces});
      delete from ez_finance.budget_configs where workspace_id in (${workspaces});
      delete from ez_finance.accounts       where workspace_id in (${workspaces});
@@ -380,6 +381,79 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await expect(
       page.getByText(/«yape» vuelve a estar disponible/i),
     ).toBeVisible();
+
+    // === SCHEDULED =========================================================
+    // What a schedule produces is an ORDINARY transaction, so the assertion that
+    // matters is that the worker's output lands in ez_finance.transactions and behaves
+    // like anything typed by hand.
+    await page.goto("/app");
+    await page.getByRole("link", { name: /programados/i }).click();
+    await page.waitForURL(/\/app\/programadas/);
+
+    await page.getByText(/programar un movimiento/i).click();
+    await page.fill("#sched-name", "Alquiler");
+    await page.fill("#sched-amount", "1200");
+    await page.fill("#sched-day", "1");
+    await page.selectOption("#sched-account", { label: "Efectivo" });
+    await page.getByRole("button", { name: /^programar$/i }).click();
+
+    await expect(page.getByText(/programamos «alquiler»/i)).toBeVisible();
+    await expect(page.getByText(/todavía no se registró/i)).toBeVisible();
+
+    // Backdate it so the worker has something due. Created "two months ago" means two
+    // missed occurrences plus this month's — the catch-up the SQL suite also pins, but
+    // here through the real cron path rather than a direct call.
+    sql(
+      `update ez_finance.scheduled_transactions
+       set    created_at = now() - interval '2 months'
+       where  workspace_id = '${workspaceId}' and name = 'Alquiler'`,
+    );
+
+    const beforeRun = Number(
+      sql(
+        `select count(*) from ez_finance.transactions
+         where workspace_id = '${workspaceId}' and base_amount = 120000`,
+      ),
+    );
+    expect(beforeRun, "nothing exists before the worker runs").toBe(0);
+
+    // The worker itself is service_role only, so it is driven the way the cron does:
+    // through the RPC, not the UI. Running it TWICE is the point — the second must
+    // create nothing.
+    sql(
+      `set role service_role;
+       select ez_finance.materialise_due_transactions(100);
+       select ez_finance.materialise_due_transactions(100);`,
+    );
+
+    const afterRun = Number(
+      sql(
+        `select count(*) from ez_finance.transactions
+         where workspace_id = '${workspaceId}' and base_amount = 120000`,
+      ),
+    );
+    expect(
+      afterRun,
+      "every missed occurrence was created, and running twice created no duplicates",
+    ).toBeGreaterThanOrEqual(2);
+
+    // The rows are ordinary transactions: the dashboard's movement list shows them.
+    await page.goto("/app");
+    await expect(page.getByText(/S\/\s*1[.,]200\.00/).first()).toBeVisible();
+
+    // Pausing stops it, and says the months in pause are not recovered.
+    await page.goto("/app/programadas");
+    await page.getByRole("button", { name: /pausar alquiler/i }).click();
+    await expect(
+      page.getByRole("button", { name: /reanudar alquiler/i }),
+    ).toBeVisible();
+
+    const paused = sql(
+      `select count(*) from ez_finance.scheduled_transactions
+       where workspace_id = '${workspaceId}' and name = 'Alquiler'
+         and paused_at is not null`,
+    );
+    expect(Number(paused), "paused, not deleted").toBe(1);
 
     // === GOALS =============================================================
     // The property that matters: PROGRESS IS DERIVED. There is no saved_amount column,
