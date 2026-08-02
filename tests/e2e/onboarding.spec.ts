@@ -133,13 +133,9 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     // --- step 1 also TEACHES the method, which is the reason it comes first ---
     // The three shares are named and quantified before anything is asked, using the
     // SAME words the dashboard will use — not a longer set invented for setup.
-    await expect(
-      page.getByText(/necesidades/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/necesidades/i).first()).toBeVisible();
     await expect(page.getByText(/deseos/i).first()).toBeVisible();
-    await expect(
-      page.getByText(/ahorro/i).first(),
-    ).toBeVisible();
+    await expect(page.getByText(/ahorro/i).first()).toBeVisible();
     await expect(page.getByText(/se mide sobre tu ingreso/i)).toBeVisible();
 
     // --- step 1: the split is PREFILLED and COLLAPSED ------------------------
@@ -382,6 +378,36 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
 
     // Efectivo: opened at 1500.50, +1000 income, -150.50 expense = 2350.00
     await expect(page.getByText(/S\/\s*2,350\.00/).first()).toBeVisible();
+
+    // --- the report explains the same month ---------------------------------
+    // The dashboard answers "how much is left"; this answers "where did it go". They
+    // read the SAME snapshot through ports of the same shape, so the point of
+    // asserting both here is that they cannot drift apart.
+    await page.goto("/app/reportes");
+
+    await expect(
+      page.getByRole("heading", { name: /reportes/i }),
+    ).toBeVisible();
+
+    // Income 1000 recorded, one expense of 150.50 against Supermercado (a need).
+    await expect(page.getByText(/S\/\s*1[.,]000\.00/).first()).toBeVisible();
+    await expect(page.getByText(/S\/\s*150\.50/).first()).toBeVisible();
+    await expect(page.getByText("Supermercado").first()).toBeVisible();
+
+    // A month with no movements is a real answer, not a failed read — so the previous
+    // month renders zeroes rather than an error.
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    const param = `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, "0")}`;
+    await page.goto(`/app/reportes?mes=${param}`);
+    await expect(page.getByText(/no registraste gastos/i)).toBeVisible();
+
+    // A mangled month falls back to today rather than erroring: the parameter is a
+    // convenience, and refusing to render over a bad query string would be theatre.
+    await page.goto("/app/reportes?mes=no-es-un-mes");
+    await expect(page.getByText("Supermercado").first()).toBeVisible();
+
+    await page.goto("/app");
 
     // --- deleting it puts the money back -----------------------------------
     // The real test of the sign rule and of the delete path together: the figures
