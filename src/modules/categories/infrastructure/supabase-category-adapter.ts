@@ -97,6 +97,33 @@ export class SupabaseCategoryAdapter implements CategoryPort {
     }
   }
 
+  async rename(
+    workspaceId: string,
+    categoryId: string,
+    name: string,
+  ): Promise<Result<void, CategoryError>> {
+    try {
+      const supabase = await createServerClient();
+
+      const { error, count } = await supabase
+        .from("categories")
+        .update({ name: name.trim() }, { count: "exact" })
+        .eq("workspace_id", workspaceId)
+        .eq("id", categoryId);
+
+      if (error) return err(mapPostgresError(error));
+
+      // ZERO ROWS IS A REFUSAL, not a no-op. RLS filters a forbidden UPDATE out
+      // instead of raising, so nothing changes and nothing errors — and reporting
+      // success there would tell someone their rename worked when it did not.
+      if (count === 0) return err({ kind: "NotPermitted" });
+
+      return ok(undefined);
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
   async unarchiveMany(
     workspaceId: string,
     categoryIds: readonly string[],

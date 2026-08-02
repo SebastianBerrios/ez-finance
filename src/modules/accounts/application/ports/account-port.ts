@@ -91,4 +91,18 @@ export interface AccountPort {
     workspaceId: string,
     accountId: string,
   ): Promise<Result<void, AccountError>>;
+
+  /**
+   * Change an account's NAME, and only its name.
+   *
+   * NOT its type: the engine reads that to decide whether a transfer INTO the account
+   * consumes the savings bucket, so changing it would silently re-interpret every
+   * transfer already recorded against it. NOT its currency either — that belongs to the
+   * workspace and is immutable.
+   */
+  rename(
+    workspaceId: string,
+    accountId: string,
+    name: string,
+  ): Promise<Result<void, AccountError>>;
 }

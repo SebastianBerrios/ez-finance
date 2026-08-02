@@ -103,6 +103,36 @@ export class SupabaseAccountAdapter implements AccountPort {
     }
   }
 
+  async rename(
+    workspaceId: string,
+    accountId: string,
+    name: string,
+  ): Promise<Result<void, AccountError>> {
+    // Validated in the use case, not here — but the trim is applied on the way out
+    // because the stored value is what every screen reads.
+    const trimmed = name.trim();
+
+    try {
+      const supabase = await createServerClient();
+
+      const { error, count } = await supabase
+        .from("accounts")
+        .update({ name: trimmed }, { count: "exact" })
+        .eq("workspace_id", workspaceId)
+        .eq("id", accountId);
+
+      if (error) return err(mapPostgresError(error));
+
+      // Same rule as setArchivedAt: RLS filters a forbidden UPDATE out rather than
+      // raising, so zero rows means "not allowed", never "done".
+      if (count === 0) return err({ kind: "NotPermitted" });
+
+      return ok(undefined);
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
   async archive(
     workspaceId: string,
     accountId: string,

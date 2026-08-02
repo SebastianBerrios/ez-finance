@@ -29,8 +29,14 @@ const ACCOUNT_TYPES: readonly AccountType[] = [
   "savings",
 ];
 
-/** Matches the length CHECK on ez_finance.accounts.name. */
-const NAME_MAX = 80;
+/**
+ * Matches the length CHECK on ez_finance.accounts.name.
+ *
+ * Exported so renameAccount enforces the same limit without restating it: a rename and
+ * a creation disagreeing about what a name may be is the kind of drift nobody notices
+ * until one path rejects what the other accepted.
+ */
+export const NAME_MAX = 80;
 
 export interface AccountDraft {
   readonly name: string;

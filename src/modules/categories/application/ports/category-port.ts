@@ -79,4 +79,18 @@ export interface CategoryPort {
     workspaceId: string,
     categoryIds: readonly string[],
   ): Promise<Result<void, CategoryError>>;
+
+  /**
+   * Change a category's NAME, and only its name.
+   *
+   * The bucket is deliberately NOT changeable through this path. It is immutable by
+   * design — re-bucketing is archive-and-replace, so the months already lived keep the
+   * bucket they were lived under — and a method that took both would be an open
+   * invitation to break that.
+   */
+  rename(
+    workspaceId: string,
+    categoryId: string,
+    name: string,
+  ): Promise<Result<void, CategoryError>>;
 }
