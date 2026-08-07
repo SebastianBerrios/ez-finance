@@ -1,0 +1,10 @@
+-- Baseline marker for the shared mvp-lab remote migration history.
+-- This migration belongs to the hello_meditacna app and is ALREADY applied on the
+-- shared remote. It is intentionally EMPTY here so `supabase db push` can reconcile
+-- the shared history and apply only ez_finance's own migrations. ez_finance does
+-- not own or maintain this migration, and must never edit it.
+--
+-- Do NOT "fix" this with `supabase db pull` (it imports every other app's schema)
+-- or `migration repair --status reverted` (it corrupts the shared ledger for the
+-- app that owns the version). See D:\Programming\Frontend\CLAUDE.md and
+-- mvp-lab-infra/OPERATIONS.md §4.
