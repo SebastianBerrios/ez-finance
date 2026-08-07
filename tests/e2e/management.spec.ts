@@ -58,7 +58,13 @@ function deleteFixtureAccounts(emails: string[]): void {
     where m.user_id in (${ids})`;
 
   sql(
-    `delete from ez_finance.transactions   where workspace_id in (${workspaces});
+    // GOALS FIRST. goals.account_id is ON DELETE RESTRICT, so an account cannot go
+    // while a goal still points at it. That restriction is deliberate — deleting an
+    // account a goal measures should fail loudly rather than silently take the goal —
+    // which makes unwinding in the right order the teardown's job, not the schema's.
+    `delete from ez_finance.scheduled_transactions where workspace_id in (${workspaces});
+     delete from ez_finance.goals           where workspace_id in (${workspaces});
+     delete from ez_finance.transactions   where workspace_id in (${workspaces});
      delete from ez_finance.budget_configs where workspace_id in (${workspaces});
      delete from ez_finance.accounts       where workspace_id in (${workspaces});
      delete from ez_finance.categories     where workspace_id in (${workspaces});
@@ -375,6 +381,147 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await expect(
       page.getByText(/«yape» vuelve a estar disponible/i),
     ).toBeVisible();
+
+    // === SCHEDULED =========================================================
+    // What a schedule produces is an ORDINARY transaction, so the assertion that
+    // matters is that the worker's output lands in ez_finance.transactions and behaves
+    // like anything typed by hand.
+    await page.goto("/app");
+    await page.getByRole("link", { name: /programados/i }).click();
+    await page.waitForURL(/\/app\/programadas/);
+
+    await page.getByText(/programar un movimiento/i).click();
+    await page.fill("#sched-name", "Alquiler");
+    await page.fill("#sched-amount", "1200");
+    await page.fill("#sched-day", "1");
+    await page.selectOption("#sched-account", { label: "Efectivo" });
+    await page.getByRole("button", { name: /^programar$/i }).click();
+
+    await expect(page.getByText(/programamos «alquiler»/i)).toBeVisible();
+    await expect(page.getByText(/todavía no se registró/i)).toBeVisible();
+
+    // Backdate it so the worker has something due. Created "two months ago" means two
+    // missed occurrences plus this month's — the catch-up the SQL suite also pins, but
+    // here through the real cron path rather than a direct call.
+    sql(
+      `update ez_finance.scheduled_transactions
+       set    created_at = now() - interval '2 months'
+       where  workspace_id = '${workspaceId}' and name = 'Alquiler'`,
+    );
+
+    const beforeRun = Number(
+      sql(
+        `select count(*) from ez_finance.transactions
+         where workspace_id = '${workspaceId}' and base_amount = 120000`,
+      ),
+    );
+    expect(beforeRun, "nothing exists before the worker runs").toBe(0);
+
+    // The worker itself is service_role only, so it is driven the way the cron does:
+    // through the RPC, not the UI. Running it TWICE is the point — the second must
+    // create nothing.
+    sql(
+      `set role service_role;
+       select ez_finance.materialise_due_transactions(100);
+       select ez_finance.materialise_due_transactions(100);`,
+    );
+
+    const afterRun = Number(
+      sql(
+        `select count(*) from ez_finance.transactions
+         where workspace_id = '${workspaceId}' and base_amount = 120000`,
+      ),
+    );
+    expect(
+      afterRun,
+      "every missed occurrence was created, and running twice created no duplicates",
+    ).toBeGreaterThanOrEqual(2);
+
+    // The rows are ordinary transactions: the dashboard's movement list shows them.
+    await page.goto("/app");
+    await expect(page.getByText(/S\/\s*1[.,]200\.00/).first()).toBeVisible();
+
+    // Pausing stops it, and says the months in pause are not recovered.
+    await page.goto("/app/programadas");
+    await page.getByRole("button", { name: /pausar alquiler/i }).click();
+    await expect(
+      page.getByRole("button", { name: /reanudar alquiler/i }),
+    ).toBeVisible();
+
+    const paused = sql(
+      `select count(*) from ez_finance.scheduled_transactions
+       where workspace_id = '${workspaceId}' and name = 'Alquiler'
+         and paused_at is not null`,
+    );
+    expect(Number(paused), "paused, not deleted").toBe(1);
+
+    // === GOALS =============================================================
+    // The property that matters: PROGRESS IS DERIVED. There is no saved_amount column,
+    // so a goal can only be right if it is reading the account behind it.
+    await page.goto("/app");
+    await page.getByRole("link", { name: /metas/i }).click();
+    await page.waitForURL(/\/app\/metas/);
+
+    // No savings account yet, so the page says what is missing instead of offering an
+    // empty picker. Efectivo is cash and Yape is a wallet — neither qualifies.
+    await expect(page.getByText(/necesitas una cuenta de tipo/i)).toBeVisible();
+
+    // Create one, with a known opening balance.
+    await page.goto("/app/cuentas");
+    await page.getByText(/agregar una cuenta/i).click();
+    await page.fill("#account-name", "Fondo viaje");
+    await page.selectOption("#account-type", "savings");
+    await page.fill("#account-balance", "400");
+    await page.getByRole("button", { name: /continuar/i }).click();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Fondo viaje" }),
+    ).toBeVisible();
+
+    await page.goto("/app/metas");
+    await page.getByText(/crear una meta/i).click();
+    await page.fill("#goal-name", "Viaje");
+    await page.fill("#goal-target", "1000");
+    await page.selectOption("#goal-account", { label: "Fondo viaje" });
+    await page.getByRole("button", { name: /^crear$/i }).click();
+
+    await expect(page.getByText(/creamos «viaje»/i)).toBeVisible();
+
+    // 400 of 1000 = 40 %, read from the ACCOUNT — nothing wrote a progress figure.
+    await expect(page.getByText(/S\/\s*400\.00/).first()).toBeVisible();
+    await expect(
+      page.getByRole("progressbar", { name: /progreso de viaje/i }),
+    ).toHaveAttribute("aria-valuenow", "40");
+
+    // Recording income into that account MOVES the goal, with nothing else written.
+    await page.goto("/app/movimientos/nuevo");
+    await page.locator('label[for="kind-income"]').click();
+    await page.fill("#tx-amount", "600");
+    await page.selectOption("#tx-account", { label: "Fondo viaje" });
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    await page.goto("/app/metas");
+    await expect(
+      page.getByRole("progressbar", { name: /progreso de viaje/i }),
+    ).toHaveAttribute("aria-valuenow", "100");
+    await expect(page.getByText(/llegaste/i)).toBeVisible();
+
+    // Archiving the goal must NOT touch the money — the fear the confirmation answers.
+    const balanceBefore = sql(
+      `select balance from ez_finance.account_balances('${workspaceId}') b
+       join ez_finance.accounts a on a.id = b.account_id
+       where a.name = 'Fondo viaje'`,
+    );
+
+    await page.getByRole("button", { name: /archivar meta viaje/i }).click();
+    await expect(page.getByText(/el dinero sigue en su cuenta/i)).toBeVisible();
+
+    const balanceAfter = sql(
+      `select balance from ez_finance.account_balances('${workspaceId}') b
+       join ez_finance.accounts a on a.id = b.account_id
+       where a.name = 'Fondo viaje'`,
+    );
+    expect(balanceAfter, "archiving a goal moves no money").toBe(balanceBefore);
 
     // === WORKSPACES ========================================================
     // A second space is the point of Fase 3's first half: money that should not be
