@@ -28,6 +28,16 @@ export type CurrentWorkspace =
       readonly isPersonal: boolean;
       /** The personal anchor, always resolved — onboarding and fallbacks need it. */
       readonly personalWorkspaceId: string;
+      /**
+       * The selected space is ARCHIVED: readable, and refused by every write path.
+       *
+       * Carried here rather than re-read per page because the whole app funnels
+       * through this function, and a screen that offers a button the database will
+       * refuse is the failure archiving was supposed to prevent. The personal
+       * anchor can never be archived (20260807210000), so this is always false
+       * when isPersonal is true.
+       */
+      readonly isArchived: boolean;
     }
   | { readonly kind: "DELETED" };
 
@@ -78,19 +88,24 @@ export async function resolveCurrentWorkspace(): Promise<
       workspaceId: personalWorkspaceId,
       isPersonal: true,
       personalWorkspaceId,
+      isArchived: false,
     });
   }
 
-  const member = await new SupabaseWorkspaceAdapter().isMember(selected);
+  const membership = await new SupabaseWorkspaceAdapter().findMembership(
+    selected,
+  );
 
-  if (!member.ok || !member.value) {
-    // Stale cookie (a workspace since left or deleted), or one that was never theirs.
-    // Either way the honest answer is the space we know they own.
+  if (!membership.ok || membership.value === null) {
+    // Stale cookie (a workspace since left, archived out of existence or deleted),
+    // or one that was never theirs. Either way the honest answer is the space we
+    // know they own.
     return ok({
       kind: "READY",
       workspaceId: personalWorkspaceId,
       isPersonal: true,
       personalWorkspaceId,
+      isArchived: false,
     });
   }
 
@@ -99,5 +114,6 @@ export async function resolveCurrentWorkspace(): Promise<
     workspaceId: selected,
     isPersonal: false,
     personalWorkspaceId,
+    isArchived: membership.value.archived,
   });
 }

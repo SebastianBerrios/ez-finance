@@ -19,6 +19,14 @@ export default async function NewTransactionPage() {
     redirect("/app");
   }
 
+  // An archived space accepts no movements, so the form has nothing to submit to.
+  // Back to the dashboard, which is where the banner explaining it lives — a
+  // rendered form whose save always fails would be a worse answer than not
+  // offering it. The database refuses regardless; this is the readable version.
+  if (entry.value.isArchived) {
+    redirect("/app");
+  }
+
   const [accounts, categories] = await Promise.all([
     new SupabaseAccountAdapter().listByWorkspace(entry.value.workspaceId),
     new SupabaseCategoryAdapter().listByWorkspace(entry.value.workspaceId),
