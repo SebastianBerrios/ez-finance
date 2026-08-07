@@ -7,6 +7,8 @@ function makePort(overrides: Partial<TransactionPort> = {}): TransactionPort {
   return {
     record: vi.fn().mockResolvedValue({ ok: true, value: { id: "tx-1" } }),
     listForMonth: vi.fn().mockResolvedValue({ ok: true, value: [] }),
+    findEditable: vi.fn(),
+    update: vi.fn().mockResolvedValue({ ok: true, value: 1 }),
     deleteOne: vi.fn().mockResolvedValue({ ok: true, value: 1 }),
     deleteTransfer: vi.fn().mockResolvedValue({ ok: true, value: 2 }),
     ...overrides,

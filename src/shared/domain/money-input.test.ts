@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseAmountToMinorUnits } from "./money-input";
+import {
+  formatMinorUnitsForInput,
+  parseAmountToMinorUnits,
+} from "./money-input";
 
 /** PEN and every currency the app offers has 2 decimals. */
 const EXP = 2;
@@ -116,5 +119,45 @@ describe("parseAmountToMinorUnits", () => {
     const huge = parseAmountToMinorUnits("99999999999999999.99", EXP);
     expect(huge.ok).toBe(true);
     if (huge.ok) expect(huge.value).toBe(9999999999999999999n);
+  });
+});
+
+describe("formatMinorUnitsForInput", () => {
+  it("writes the decimals the currency has", () => {
+    expect(formatMinorUnitsForInput(150000n, EXP)).toBe("1500.00");
+    expect(formatMinorUnitsForInput(2550n, EXP)).toBe("25.50");
+  });
+
+  it("pads an amount smaller than one unit", () => {
+    // 5n at exponent 2 is five CENTS. Written as "5" it would parse back as five
+    // soles — a hundredfold error in a field a person is about to save.
+    expect(formatMinorUnitsForInput(5n, EXP)).toBe("0.05");
+    expect(formatMinorUnitsForInput(50n, EXP)).toBe("0.50");
+    expect(formatMinorUnitsForInput(0n, EXP)).toBe("0.00");
+  });
+
+  it("omits the separator for a zero-exponent currency", () => {
+    expect(formatMinorUnitsForInput(1500n, 0)).toBe("1500");
+  });
+
+  it("keeps a negative sign in front of the padding", () => {
+    // Nothing records a negative movement — the kind carries the sign — but a
+    // formatter that answered "-0.05" as "0.-05" would be broken, and a helper
+    // this small should not have a shape it cannot handle.
+    expect(formatMinorUnitsForInput(-5n, EXP)).toBe("-0.05");
+    expect(formatMinorUnitsForInput(-150000n, EXP)).toBe("-1500.00");
+  });
+
+  it("round-trips whatever parseAmountToMinorUnits accepted", () => {
+    // THE PROPERTY THAT MATTERS: an edit form is prefilled with this and submits it
+    // straight back. If the pair disagreed, opening a movement and pressing save
+    // without touching anything would CHANGE the amount.
+    for (const typed of ["0.05", "25.50", "1500.00", "99999999999999999.99"]) {
+      const parsed = parseAmountToMinorUnits(typed, EXP);
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) {
+        expect(formatMinorUnitsForInput(parsed.value, EXP)).toBe(typed);
+      }
+    }
   });
 });

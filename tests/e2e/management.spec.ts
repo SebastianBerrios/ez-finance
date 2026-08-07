@@ -651,5 +651,84 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
        where  workspace_id = '${workspaceId}'`,
     );
     expect(afterMode).toBe("400000|real");
+
+    // === EDITING A MOVEMENT ================================================
+    // Until this existed a mistyped amount could only be deleted and retyped. What
+    // has to hold: the form opens PREFILLED (a blank form would silently blank the
+    // fields nobody touched), the correction reaches the row, and the dashboard
+    // recomputes from it.
+    //
+    // The mode is put back to 'mayor' first, because 'real' would hold every bucket
+    // at zero and hide the very recomputation this section is checking.
+    await page.goto("/app/presupuesto");
+    await page.check("#income-mode-mayor");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+    await expect(page.getByText(/guardado/i)).toBeVisible();
+
+    await page.goto("/app/movimientos/nuevo");
+    await page.fill("#tx-amount", "80");
+    await page.selectOption("#tx-account", { label: "Efectivo" });
+
+    // The option's VALUE, read from the DOM rather than matched by label: the text
+    // is `${name} · ${bucket}`, so selecting by label would hardcode both the
+    // category's name and the wording of BUCKET_LABEL — two things this section has
+    // no opinion about and that earlier steps in this same test rename.
+    const categoryValue =
+      (await page
+        .locator("#tx-category option")
+        .nth(1)
+        .getAttribute("value")) ?? "";
+    await page.selectOption("#tx-category", categoryValue);
+
+    await page.fill("#tx-note", "Mal tipeado");
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    await expect(page.getByText(/mal tipeado/i)).toBeVisible();
+
+    // Reached through the ROW, not by the movement's label: the note is what this
+    // section controls, and it identifies exactly one row.
+    await page
+      .getByRole("listitem")
+      .filter({ hasText: "Mal tipeado" })
+      .getByRole("link", { name: /^editar/i })
+      .click();
+    await page.waitForURL(/\/app\/movimientos\/[^/]+\/editar$/);
+
+    // PREFILLED, and the amount round-trips as text: 8000 minor units must read
+    // "80.00", not "8000" and not "80". A formatter that disagreed with the parser
+    // would change the figure on a save that touched nothing.
+    await expect(page.locator("#tx-amount")).toHaveValue("80.00");
+    await expect(page.locator("#tx-note")).toHaveValue("Mal tipeado");
+
+    await page.fill("#tx-amount", "45.50");
+    await page.fill("#tx-note", "Corregido");
+    await page.getByRole("button", { name: /guardar cambios/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    const edited = sql(
+      `select base_amount || '|' || entered_amount || '|' || note
+       from   ez_finance.transactions
+       where  workspace_id = '${workspaceId}' and note = 'Corregido'`,
+    );
+    expect(
+      edited,
+      "entered_amount tracks the base, or the row claims the person typed one" +
+        " figure while the app stored another",
+    ).toBe("4550|4550|Corregido");
+
+    const oldRow = sql(
+      `select count(*) from ez_finance.transactions
+       where  workspace_id = '${workspaceId}' and note = 'Mal tipeado'`,
+    );
+    expect(
+      Number(oldRow),
+      "an edit UPDATES; it does not insert a second row",
+    ).toBe(0);
+
+    // The dashboard recomputed: the corrected figure is on screen and the wrong one
+    // is not. This is what makes the edit real rather than merely stored.
+    await expect(page.getByText(/S\/\s*45\.50/).first()).toBeVisible();
+    await expect(page.getByText(/corregido/i)).toBeVisible();
   });
 });
