@@ -34,6 +34,28 @@ begin
   else raise exception 'FAIL: %', p_label; end if;
 end;
 $$;
+create or replace function pg_temp.rejects(p_sql text, p_label text) returns void language plpgsql as $$
+begin
+  begin execute p_sql;
+  exception when others then raise notice 'PASS: % (%)', p_label, sqlerrm; return;
+  end;
+  raise exception 'FAIL: % — the statement was ACCEPTED', p_label;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- THE TWO WAYS A POLICY SAYS NO, because the checks below assert on different
+-- things depending on which one applies and getting it backwards writes a test
+-- that fails against correct code:
+--
+--   USING mismatch      → the row is FILTERED OUT of those the statement can
+--                         match. Nothing changes and NOTHING IS RAISED, so the
+--                         only evidence is the surviving row. (Someone else's
+--                         movement; a transfer leg.)
+--   WITH CHECK violation → the row would be matched, but the RESULT is not
+--                         allowed. Postgres RAISES 42501. (An expense turned
+--                         into a transfer; authorship reassigned.)
+-- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
 -- Fixtures: a shared workspace, two accounts, one category, and three people —
@@ -74,9 +96,7 @@ select ez_finance.record_transfer(
   'e0000000-0000-4000-8000-0000000000ed',
   'e0000000-0000-4000-8000-00000000ae01',
   'e0000000-0000-4000-8000-00000000ae02',
-  50000,
-  current_date,
-  null
+  50000, 50000, 'PEN', 1, current_date, 'Al ahorro'
 ) as tid \gset
 
 -- ===========================================================================
@@ -139,21 +159,26 @@ select pg_temp.check(
 
 -- ===========================================================================
 -- 3. An expense cannot be turned INTO a transfer.
---    transactions_kind_shape would refuse this on its own (a transfer needs
---    transfer_id, transfer_leg and counter_account_id), so what is verified here
---    is that the row survives unchanged either way — the WITH CHECK clause is the
---    authorisation-level answer rather than a constraint accident.
+--    This one RAISES rather than passing silently, and that is the WITH CHECK
+--    clause doing it: the existing row satisfies USING (it is an expense the
+--    caller authored), so the statement matches it — what is refused is the
+--    RESULT. transactions_kind_shape would also refuse the attempt, but a
+--    constraint is not an authorisation rule, and leaning on one is how the
+--    UPDATE policy came to be missing this clause in the first place.
 -- ===========================================================================
 select pg_temp.as_user('e1111111-0000-4000-8000-000000000201');
-update ez_finance.transactions
-set    kind = 'transfer'
-where  id = 'e0000000-0000-4000-8000-00000000af01';
+select pg_temp.rejects(
+  $$update ez_finance.transactions
+    set    kind = 'transfer'
+    where  id = 'e0000000-0000-4000-8000-00000000af01'$$,
+  'an expense cannot become a transfer'
+);
 
 select pg_temp.as_postgres();
 select pg_temp.check(
   (select kind from ez_finance.transactions
    where id = 'e0000000-0000-4000-8000-00000000af01') = 'expense',
-  'an expense cannot become a transfer'
+  'and the row is untouched by the attempt'
 );
 
 -- ===========================================================================
@@ -186,21 +211,25 @@ select pg_temp.check(
 );
 
 -- ===========================================================================
--- 5. An edit cannot reassign authorship, and cannot move the movement to
---    another space. Both are refused by the policy rather than by the app
---    leaving the columns out of its payload.
+-- 5. An edit cannot reassign authorship. Refused by the policy, not merely by
+--    the adapter leaving created_by out of its payload — and it RAISES, because
+--    the row being edited is the caller's (USING passes) while the row it would
+--    become is not (WITH CHECK fails).
 -- ===========================================================================
 select pg_temp.as_user('e1111111-0000-4000-8000-000000000201');
-update ez_finance.transactions
-set    created_by = 'e2222222-0000-4000-8000-000000000202'
-where  id = 'e0000000-0000-4000-8000-00000000af01';
+select pg_temp.rejects(
+  $$update ez_finance.transactions
+    set    created_by = 'e2222222-0000-4000-8000-000000000202'
+    where  id = 'e0000000-0000-4000-8000-00000000af01'$$,
+  'an edit cannot hand the movement to someone else'
+);
 
 select pg_temp.as_postgres();
 select pg_temp.check(
   (select created_by from ez_finance.transactions
    where id = 'e0000000-0000-4000-8000-00000000af01')
     = 'e1111111-0000-4000-8000-000000000201',
-  'an edit cannot hand the movement to someone else'
+  'and the author is unchanged'
 );
 
 -- ===========================================================================
