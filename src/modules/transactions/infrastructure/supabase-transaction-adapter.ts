@@ -1,6 +1,7 @@
 // supabase-transaction-adapter.ts — implements TransactionPort.
 // Only file in the transactions module that talks to @supabase/*.
 import type {
+  EditableMovement,
   Movement,
   TransactionPort,
   TransactionRef,
@@ -65,6 +66,19 @@ interface MovementRow {
   readonly created_by: string | null;
   readonly account: { name: string } | { name: string }[] | null;
   readonly category: { name: string } | { name: string }[] | null;
+}
+
+/** The row behind an edit form: ids, and the two columns that decide editability. */
+interface EditableRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly base_amount: string | number;
+  readonly occurred_on: string;
+  readonly account_id: string;
+  readonly category_id: string | null;
+  readonly note: string | null;
+  readonly transfer_id: string | null;
+  readonly created_by: string | null;
 }
 
 function embeddedName(
@@ -172,6 +186,110 @@ export class SupabaseTransactionAdapter implements TransactionPort {
       return ok(
         ((data ?? []) as MovementRow[]).map((row) => toMovement(row, viewerId)),
       );
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
+  async findEditable(
+    workspaceId: string,
+    transactionId: string,
+    viewerId: string,
+  ): Promise<Result<EditableMovement, TransactionError>> {
+    try {
+      const supabase = await createServerClient();
+
+      // maybeSingle, not single: single treats "no rows" as an ERROR, which would
+      // arrive here as Unavailable and tell someone the app is broken when the truth
+      // is that the movement does not exist in this workspace.
+      const { data, error } = await supabase
+        .from("transactions")
+        .select(
+          "id, kind, base_amount, occurred_on, account_id, category_id, note, transfer_id, created_by",
+        )
+        .eq("workspace_id", workspaceId)
+        .eq("id", transactionId)
+        .maybeSingle();
+
+      if (error) return err(mapPostgresError(error));
+      if (!data) return err({ kind: "UnknownReference" });
+
+      const row = data as EditableRow;
+
+      // Checked before ownership because it is the more specific truth, and it leaks
+      // nothing: every role of the workspace may already SELECT this row.
+      if (row.transfer_id !== null || row.kind === "transfer") {
+        return err({ kind: "TransferNotEditable" });
+      }
+
+      // RLS grants SELECT to every role of the workspace but UPDATE only to the
+      // author, so a readable row is NOT an editable one. Refusing here is what
+      // stops the form from opening on something the save would silently drop.
+      if (row.created_by === null || row.created_by !== viewerId) {
+        return err({ kind: "NotPermitted" });
+      }
+
+      return ok({
+        id: row.id,
+        // Narrowed rather than cast blindly: the two guards above have already
+        // removed 'transfer', and the column's CHECK admits nothing else.
+        kind: row.kind === "income" ? "income" : "expense",
+        baseAmountMinorUnits: BigInt(row.base_amount),
+        occurredOn: row.occurred_on,
+        accountId: row.account_id,
+        categoryId: row.category_id,
+        note: row.note,
+      });
+    } catch {
+      return err({ kind: "Unavailable" });
+    }
+  }
+
+  async update(
+    workspaceId: string,
+    transactionId: string,
+    draft: TransactionDraft,
+  ): Promise<Result<number, TransactionError>> {
+    try {
+      const supabase = await createServerClient();
+
+      const amount = draft.baseAmountMinorUnits.toString();
+
+      // .select() for the same reason deleteOne needs it: a refused UPDATE matches
+      // zero rows and raises nothing, so without the returned rows "no error" and
+      // "changed" are indistinguishable.
+      //
+      // neq("kind", "transfer") repeats what the UPDATE policy enforces. Belt and
+      // braces on purpose — this adapter must not be the thing that breaks a tied
+      // pair if it ever runs against a database where the policy is older.
+      //
+      // workspace_id and created_by are NOT in the payload: an edit corrects what
+      // was recorded, it does not move a movement to another space or reassign its
+      // author. Leaving them out means no statement can even try.
+      const { data, error } = await supabase
+        .from("transactions")
+        .update({
+          account_id: draft.accountId,
+          kind: draft.kind,
+          base_amount: amount,
+          // Single-currency app, so the entered amount tracks the base and the
+          // frozen rate stays 1. Writing entered_amount here is what keeps the row
+          // honest: leaving it at the old value would claim the person typed one
+          // figure and the app stored another.
+          entered_amount: amount,
+          exchange_rate: 1,
+          occurred_on: draft.occurredOn,
+          category_id: draft.categoryId ?? null,
+          note: draft.note ?? null,
+        })
+        .eq("workspace_id", workspaceId)
+        .eq("id", transactionId)
+        .neq("kind", "transfer")
+        .select("id");
+
+      if (error) return err(mapPostgresError(error));
+
+      return ok((data ?? []).length);
     } catch {
       return err({ kind: "Unavailable" });
     }

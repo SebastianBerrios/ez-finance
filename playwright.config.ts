@@ -91,6 +91,29 @@ function localStack(): LocalStack | null {
 
 const stack = localStack();
 
+/**
+ * The port the run's OWN server listens on. 3000 unless E2E_PORT says otherwise.
+ *
+ * WHY THIS IS CONFIGURABLE. This repo shares a folder with the rest of the
+ * mvp-lab fleet, and a sibling app's dev server holding 3000 is routine. Because
+ * reuseExistingServer is false — correctly — Playwright refuses to adopt that
+ * server and the whole suite dies on a port clash instead of running. Moving the
+ * run beats killing someone else's dev server.
+ *
+ * MOVING IS NOT FREE, and this is the part that has to be read before setting it.
+ * The origin must be in `additional_redirect_urls` in supabase/config.toml, or
+ * Auth substitutes the project's Site URL into every email link and
+ * tests/e2e/auth-email-redirects.spec fails with three confusing failures. That
+ * list is exact per port, so the ALLOW-LISTED values are the only usable ones:
+ * 3000 and 3100. A new port needs a line there plus a full `supabase stop &&
+ * supabase start`, because a running stack keeps the old allow-list.
+ *
+ * The strictness is untouched: the server is still started by this config, with
+ * this config's credentials. Only the number changes.
+ */
+const PORT = process.env["E2E_PORT"] ?? "3000";
+const BASE_URL = `http://localhost:${PORT}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -99,7 +122,7 @@ export default defineConfig({
   ...(process.env["CI"] ? { workers: 1 as const } : {}),
   reporter: "html",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: BASE_URL,
     trace: "on-first-retry",
   },
   projects: [
@@ -112,7 +135,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "pnpm build && pnpm start",
-    url: "http://localhost:3000",
+    url: BASE_URL,
     // NEVER reuse. A server this config did not start is a server whose
     // Supabase credentials it cannot vouch for.
     reuseExistingServer: false,
@@ -120,6 +143,8 @@ export default defineConfig({
     // Real process env beats .env files in Next.js (@next/env leaves anything
     // already defined alone), so these win over .env.local at build AND at run.
     env: {
+      // next start reads PORT; next build ignores it.
+      PORT,
       NEXT_PUBLIC_SUPABASE_URL: stack?.url ?? UNREACHABLE_URL,
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:
         stack?.publishableKey ?? "no-local-stack",
