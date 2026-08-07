@@ -12,7 +12,7 @@ function portWith(
     workspaces: {
       create,
       listForCurrentUser: vi.fn(),
-      isMember: vi.fn(),
+      findMembership: vi.fn(),
     } as unknown as WorkspacePort,
   };
 }
