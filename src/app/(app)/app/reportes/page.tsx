@@ -9,39 +9,11 @@ import { getMonthlyReport } from "@/modules/reports/application/get-monthly-repo
 import { BUCKET_LABEL, BUCKET_ORDER } from "@shared/ui/bucket-labels";
 import { MoneyDisplay } from "@shared/ui/money-display";
 
+import { MONTH_NAMES, monthLabel, parseMonth, toParam } from "./month-param";
+
 export const metadata: Metadata = {
   title: "Reportes — ez finance",
 };
-
-const MONTH_NAMES = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-] as const;
-
-/** `YYYY-MM` → a Date on that month's first day, or null when it is not that shape. */
-function parseMonth(raw: string | undefined): Date | null {
-  if (raw === undefined || !/^\d{4}-\d{2}$/.test(raw)) return null;
-
-  const [year, month] = raw.split("-").map(Number);
-  if (year === undefined || month === undefined) return null;
-  if (month < 1 || month > 12) return null;
-
-  return new Date(year, month - 1, 1);
-}
-
-function toParam(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
 
 /**
  * Where the month's money went.
@@ -87,7 +59,7 @@ export default async function ReportsPage({
 
   const previous = new Date(month.getFullYear(), month.getMonth() - 1, 1);
   const next = new Date(month.getFullYear(), month.getMonth() + 1, 1);
-  const label = `${MONTH_NAMES[month.getMonth()]} ${month.getFullYear()}`;
+  const label = monthLabel(month);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-6">
@@ -122,6 +94,33 @@ export default async function ReportsPage({
           {MONTH_NAMES[next.getMonth()]} →
         </Link>
       </nav>
+
+      {/*
+        The two exports, side by side because they answer different questions. The CSV
+        is the DATA — one table a spreadsheet can pivot. The printable view is the
+        VISUAL one, and it is the PDF: the browser's own "Guardar como PDF" beats a
+        server-side renderer that would add megabytes of dependency and a second layout
+        engine to keep in agreement with this page.
+
+        Offered even when the month is empty. Finding out that a month exported nothing
+        is a legitimate answer, and a button that appears only sometimes is a button
+        people stop looking for.
+      */}
+      <div className="flex items-center gap-2">
+        <a
+          href={`/app/reportes/export?mes=${toParam(month)}`}
+          className="border-border text-foreground hover:bg-muted/40 flex flex-1 items-center justify-center rounded-md border px-3 py-2 text-sm transition-colors"
+          download
+        >
+          Descargar CSV
+        </a>
+        <Link
+          href={`/app/reportes/imprimir?mes=${toParam(month)}`}
+          className="border-border text-foreground hover:bg-muted/40 flex flex-1 items-center justify-center rounded-md border px-3 py-2 text-sm transition-colors"
+        >
+          Ver para imprimir
+        </Link>
+      </div>
 
       {!report.ok ? (
         <div
