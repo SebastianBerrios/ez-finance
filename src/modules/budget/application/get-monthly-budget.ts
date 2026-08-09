@@ -85,6 +85,24 @@ export async function getMonthlyBudget(
 
   const near = config.value.nearLimitThresholdPct;
 
+  // Denominated in the SNAPSHOT's currency, like expectedIncome above, because the
+  // engine refuses a config whose amounts disagree with the month's base currency.
+  //
+  // A limit whose currency Money rejects is DROPPED rather than failing the whole
+  // month: the code came out of a column the app only ever writes from the supported
+  // set, so it means drift — and losing one alert is a smaller wrong than a dashboard
+  // that will not render. The same reasoning the engine applies to a transaction with
+  // an unknown category.
+  const categoryLimits = config.value.categoryLimits.flatMap((limit) => {
+    const money = fromMinorUnits(
+      snapshot.value!.baseCurrency,
+      limit.limitMinorUnits,
+    );
+    return money.ok
+      ? [{ categoryId: limit.categoryId, limit: money.value }]
+      : [];
+  });
+
   const result = computeBudget(
     snapshot.value,
     // Built conditionally: exactOptionalPropertyTypes is on and the engine
@@ -95,12 +113,14 @@ export async function getMonthlyBudget(
           incomeMode: config.value.incomeMode,
           expectedIncome: expectedIncome.value,
           percentages: config.value.percentages,
+          categoryLimits,
         }
       : {
           incomeMode: config.value.incomeMode,
           expectedIncome: expectedIncome.value,
           percentages: config.value.percentages,
           nearLimitThresholdPct: near,
+          categoryLimits,
         },
   );
 

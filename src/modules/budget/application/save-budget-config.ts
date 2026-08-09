@@ -6,7 +6,7 @@ import { err, ok, type Result } from "@shared/domain/result";
 
 import type {
   BudgetConfigPort,
-  StoredBudgetConfig,
+  BudgetConfigDraft,
 } from "./ports/budget-config-port";
 
 /** IncomeMode as runtime values — the type cannot be iterated. */
@@ -79,7 +79,7 @@ export async function saveBudgetConfig(
   // Built conditionally rather than with `nearLimitThresholdPct: input.x`:
   // exactOptionalPropertyTypes is on, and the engine defaults the threshold to 80
   // when the KEY IS ABSENT. A present-but-undefined value is a different thing.
-  const stored: StoredBudgetConfig =
+  const stored: BudgetConfigDraft =
     input.nearLimitThresholdPct === undefined
       ? {
           incomeMode,

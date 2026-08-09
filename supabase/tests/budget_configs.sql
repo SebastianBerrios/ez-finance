@@ -170,10 +170,19 @@ begin
 end;
 $$;
 select pg_temp.as_anon();
-select pg_temp.check(
-  (select count(*) from ez_finance.budget_config_for(
-     'f0000000-0000-4000-8000-00000000000f', '2026-03-10')) = 0,
-  'anon reads nothing through budget_config_for — the function is INVOKER, not DEFINER'
+
+-- anon cannot even EXECUTE it now, which is stronger than reading nothing through it.
+--
+-- This check used to assert `count(*) = 0`: SECURITY INVOKER meant anon's own RLS
+-- returned no rows, which was correct but relied on the policy being the only guard.
+-- Postgres grants EXECUTE to PUBLIC on every new function and the original migration
+-- only added a grant, never a revoke, so the anon key could reach it. 20260808010000
+-- revokes it — the same least-privilege pattern create_workspace and the deletion RPCs
+-- already follow — and the refusal now comes one layer earlier.
+select pg_temp.rejects(
+  $$select count(*) from ez_finance.budget_config_for(
+      'f0000000-0000-4000-8000-00000000000f', '2026-03-10')$$,
+  'anon cannot execute budget_config_for at all — revoked, not merely filtered by RLS'
 );
 select pg_temp.as_postgres();
 

@@ -12,7 +12,21 @@ import type { Result } from "@shared/domain/result";
  * currency out of here means one fewer place it could disagree with itself — the
  * dashboard assembles the engine's BudgetConfig when it reads the workspace.
  */
-export interface StoredBudgetConfig {
+/** One per-category ceiling, in minor units of the workspace's base currency. */
+export interface StoredCategoryLimit {
+  readonly categoryId: string;
+  readonly limitMinorUnits: bigint;
+}
+
+/**
+ * What a WRITE carries: the budget itself, and nothing that only exists once stored.
+ *
+ * Split from StoredBudgetConfig when limits arrived, because the two directions stopped
+ * having the same obligations — the type system said so immediately. Saving cannot
+ * supply the row's id (the upsert decides it) and does not touch limits, so a single
+ * shared type would have forced every caller of saveFromMonth to invent both.
+ */
+export interface BudgetConfigDraft {
   readonly incomeMode: IncomeMode;
   readonly expectedIncomeMinorUnits: bigint;
   readonly percentages: {
@@ -23,7 +37,38 @@ export interface StoredBudgetConfig {
   readonly nearLimitThresholdPct?: number;
 }
 
+/** What a READ answers: the draft, plus what only exists once it is stored. */
+export interface StoredBudgetConfig extends BudgetConfigDraft {
+  /**
+   * The config row's id.
+   *
+   * Carried because a limit is written AGAINST the config that was just read, and
+   * resolving "which config is in force for month M" a second time in the adapter
+   * would be that rule in two places — the exact thing budget_config_for exists to
+   * prevent.
+   */
+  readonly id: string;
+  /** Empty when none are set; never undefined, so callers have one shape to read. */
+  readonly categoryLimits: readonly StoredCategoryLimit[];
+}
+
 export interface BudgetConfigPort {
+  /**
+   * Set or clear one category's ceiling on a given config.
+   *
+   * `limitMinorUnits === null` REMOVES it. A limit of zero is not a limit — the check
+   * on the column refuses it — and modelling "no ceiling" as zero would make the
+   * engine treat every peso spent as over budget.
+   *
+   * Upsert, keyed by (config, category): the screen offers one field per category and
+   * a person editing the same one twice means the second value, not a second row.
+   */
+  setCategoryLimit(
+    workspaceId: string,
+    budgetConfigId: string,
+    categoryId: string,
+    limitMinorUnits: bigint | null,
+  ): Promise<Result<void, BudgetConfigError>>;
   /**
    * Store the config that takes effect from `month` onward.
    *
@@ -36,7 +81,7 @@ export interface BudgetConfigPort {
   saveFromMonth(
     workspaceId: string,
     month: Date,
-    config: StoredBudgetConfig,
+    config: BudgetConfigDraft,
   ): Promise<Result<void, BudgetConfigError>>;
 
   /**

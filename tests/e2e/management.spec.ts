@@ -79,6 +79,21 @@ function deleteFixtureAccounts(emails: string[]): void {
   );
 }
 
+/**
+ * A category's id, needed because the per-category limit fields are keyed by it
+ * (`#limit-<uuid>`). Read from the database rather than scraped off the page: the id is
+ * not shown anywhere, and the alternative is matching a label and walking the DOM.
+ */
+async function categoryIdOfIn(
+  workspaceId: string,
+  name: string,
+): Promise<string> {
+  return sql(
+    `select id from ez_finance.categories
+     where workspace_id = '${workspaceId}' and name = '${name}'`,
+  );
+}
+
 /** The workspace's id, for scoping assertions to this fixture only. */
 function workspaceIdOf(email: string): string {
   return sql(
@@ -651,5 +666,80 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
        where  workspace_id = '${workspaceId}'`,
     );
     expect(afterMode).toBe("400000|real");
+
+    // --- category limits ---------------------------------------------------
+    // The engine has been able to emit per-category alerts since it was written and
+    // nothing could ever configure one. What has to hold end to end: the number typed
+    // here reaches the database, and the DASHBOARD acts on it.
+    //
+    // The mode goes back to 'mayor' first — 'real' holds every figure at zero, which
+    // would hide the very alert this section is about.
+    await page.goto("/app/presupuesto");
+    await page.check("#income-mode-mayor");
+    await page.getByRole("button", { name: /^guardar$/i }).click();
+    await expect(page.getByText(/guardado/i)).toBeVisible();
+
+    await page.getByText(/límites por categoría/i).click();
+
+    const petsLimit = page.locator(
+      "#limit-" + (await categoryIdOfIn(workspaceId, "Mascotas")),
+    );
+    await petsLimit.fill("100");
+    await page
+      .getByRole("button", { name: /guardar límite de mascotas/i })
+      .click();
+    await expect(page.getByText(/guardamos el límite/i)).toBeVisible();
+
+    const storedLimit = sql(
+      `select l.limit_amount from ez_finance.category_limits l
+       join   ez_finance.categories c on c.id = l.category_id
+       where  l.workspace_id = '${workspaceId}' and c.name = 'Mascotas'`,
+    );
+    expect(storedLimit, "100.00 stored as minor units").toBe("10000");
+
+    // Prefilled on the way back, formatted — not "10000", which would multiply the
+    // ceiling by a hundred the next time someone pressed save.
+    await page.goto("/app/presupuesto");
+    await page.getByText(/límites por categoría/i).click();
+    await expect(
+      page.locator("#limit-" + (await categoryIdOfIn(workspaceId, "Mascotas"))),
+    ).toHaveValue("100.00");
+
+    // Spend past it, and the DASHBOARD says so. This is the assertion the whole
+    // feature exists for.
+    await page.goto("/app/movimientos/nuevo");
+    await page.fill("#tx-amount", "95");
+    await page.selectOption("#tx-account", { label: "Efectivo" });
+    await page.selectOption(
+      "#tx-category",
+      await categoryIdOfIn(workspaceId, "Mascotas"),
+    );
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    await expect(
+      page.getByLabel("Alertas"),
+      "95.00 against a 100.00 ceiling is past the 80 % threshold",
+    ).toBeVisible();
+
+    // --- and clearing it removes the alert ---------------------------------
+    // An empty field is the only intuitive way to erase a number, and zero is refused
+    // everywhere because a ceiling of zero is a prohibition rather than a budget.
+    await page.goto("/app/presupuesto");
+    await page.getByText(/límites por categoría/i).click();
+    await page
+      .locator("#limit-" + (await categoryIdOfIn(workspaceId, "Mascotas")))
+      .fill("");
+    await page
+      .getByRole("button", { name: /guardar límite de mascotas/i })
+      .click();
+    await expect(page.getByText(/ya no tiene límite/i)).toBeVisible();
+
+    const afterClear = sql(
+      `select count(*) from ez_finance.category_limits l
+       join   ez_finance.categories c on c.id = l.category_id
+       where  l.workspace_id = '${workspaceId}' and c.name = 'Mascotas'`,
+    );
+    expect(Number(afterClear), "cleared means the row is gone").toBe(0);
   });
 });
