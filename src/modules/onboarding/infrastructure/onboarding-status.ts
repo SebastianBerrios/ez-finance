@@ -69,7 +69,9 @@ export async function readOnboardingStatus(
     // expected_income is a bigint, which PostgREST may hand back as a number or
     // as a string. Number() covers both; a null or an unparseable value becomes
     // NaN, and NaN > 0n is false, so the fail-closed direction is the default.
-    const configRow = ((config.data ?? []) as { expected_income?: unknown }[])[0];
+    const configRow = (
+      (config.data ?? []) as { expected_income?: unknown }[]
+    )[0];
     const expectedIncome =
       configRow === undefined ? Number.NaN : Number(configRow.expected_income);
     const hasBudgetConfig = expectedIncome > 0;

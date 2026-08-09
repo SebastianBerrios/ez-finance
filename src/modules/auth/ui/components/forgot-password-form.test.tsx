@@ -8,9 +8,13 @@ import {
 } from "./forgot-password-form";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 type ActionFn = (
@@ -40,13 +44,9 @@ describe("ForgotPasswordForm", () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/si existe una cuenta/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/si existe una cuenta/i)).toBeInTheDocument();
       // Form is replaced by the success message
-      expect(
-        screen.queryByRole("button"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
     });
   });
 
@@ -65,11 +65,16 @@ describe("ForgotPasswordForm", () => {
 
   it("disables submit button while pending", async () => {
     const action = vi.fn(
-      () => new Promise<ForgotPasswordFormState>(() => {/* never resolves */}),
+      () =>
+        new Promise<ForgotPasswordFormState>(() => {
+          /* never resolves */
+        }),
     ) as unknown as ActionFn;
 
     render(<ForgotPasswordForm action={action} />);
-    const button = screen.getByRole("button", { name: /enviar instrucciones/i });
+    const button = screen.getByRole("button", {
+      name: /enviar instrucciones/i,
+    });
     await userEvent.click(button);
 
     await waitFor(() => {
