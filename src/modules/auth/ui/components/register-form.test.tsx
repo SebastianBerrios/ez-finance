@@ -5,9 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 import { RegisterForm, type RegisterFormState } from "./register-form";
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 type ActionFn = (
@@ -35,25 +39,30 @@ describe("RegisterForm", () => {
     });
     render(<RegisterForm action={action} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /crear cuenta/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /crear cuenta/i }),
+    );
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/no pudimos completar/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/no pudimos completar/i)).toBeInTheDocument();
     });
   });
 
   it("shows weak-password error from server", async () => {
     const action = makeAction({
-      error: "La contraseña no cumple los requisitos (mínimo 10 caracteres, letra y número).",
+      error:
+        "La contraseña no cumple los requisitos (mínimo 10 caracteres, letra y número).",
     });
     render(<RegisterForm action={action} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /crear cuenta/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /crear cuenta/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/contraseña no cumple/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /contraseña no cumple/i,
+      );
     });
   });
 
@@ -72,9 +81,7 @@ describe("RegisterForm", () => {
 
   it("shows policy hint (not warning) on empty password", () => {
     render(<RegisterForm action={makeAction({})} />);
-    expect(
-      screen.getByText(/mínimo 10 caracteres/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/mínimo 10 caracteres/i)).toBeInTheDocument();
   });
 
   it("clears policy warning once password meets requirements", async () => {
@@ -93,7 +100,10 @@ describe("RegisterForm", () => {
 
   it("disables submit button while pending", async () => {
     const action = vi.fn(
-      () => new Promise<RegisterFormState>(() => {/* never resolves */}),
+      () =>
+        new Promise<RegisterFormState>(() => {
+          /* never resolves */
+        }),
     ) as unknown as ActionFn;
 
     render(<RegisterForm action={action} />);

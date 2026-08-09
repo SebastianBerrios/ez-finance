@@ -1,6 +1,10 @@
 // supabase-profile-adapter.ts — implements ProfilePort
 // Reads/writes ez_finance.profiles for the authenticated user.
-import { type AvatarFile, type ProfilePort, type UserProfilePatch } from "@/modules/auth/application/ports/profile-port";
+import {
+  type AvatarFile,
+  type ProfilePort,
+  type UserProfilePatch,
+} from "@/modules/auth/application/ports/profile-port";
 import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { type UserProfile } from "@/modules/auth/domain/user-profile";
 import { type Result, err, ok } from "@/shared/domain/result";
@@ -59,9 +63,12 @@ export class SupabaseProfileAdapter implements ProfilePort {
       const supabase = await createServerClient();
 
       const updatePayload: Record<string, unknown> = {};
-      if (patch.displayName !== undefined) updatePayload["display_name"] = patch.displayName;
-      if (patch.photoUrl !== undefined) updatePayload["photo_url"] = patch.photoUrl;
-      if (patch.language !== undefined) updatePayload["language"] = patch.language;
+      if (patch.displayName !== undefined)
+        updatePayload["display_name"] = patch.displayName;
+      if (patch.photoUrl !== undefined)
+        updatePayload["photo_url"] = patch.photoUrl;
+      if (patch.language !== undefined)
+        updatePayload["language"] = patch.language;
       if (patch.defaultCurrency !== undefined)
         updatePayload["default_currency"] = patch.defaultCurrency.toUpperCase();
 
@@ -90,7 +97,8 @@ export class SupabaseProfileAdapter implements ProfilePort {
       const supabase = await createServerClient();
 
       const updatePayload: Record<string, unknown> = {};
-      if (prefs.language !== undefined) updatePayload["language"] = prefs.language;
+      if (prefs.language !== undefined)
+        updatePayload["language"] = prefs.language;
       if (prefs.defaultCurrency !== undefined)
         updatePayload["default_currency"] = prefs.defaultCurrency.toUpperCase();
 

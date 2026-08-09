@@ -138,7 +138,10 @@ describe("bootstrapUserWorkspace", () => {
     // re-provision, and that refusal must land on the notice, not on an error.
     rpcResolves({
       deletion_state: { data: { state: "ACTIVE" }, error: null },
-      bootstrap: { data: null, error: { message: "account_deleted", code: "P0001" } },
+      bootstrap: {
+        data: null,
+        error: { message: "account_deleted", code: "P0001" },
+      },
     });
 
     const result = await bootstrapUserWorkspace();
@@ -202,9 +205,8 @@ describe("bootstrapUserWorkspace", () => {
   it("issues its RPCs on the client that validated the session", async () => {
     // getUser() can refresh the access token. Validating on one client and then
     // calling RPCs on a second one sends the stale token.
-    const { createServerClient } = await import(
-      "@/shared/infrastructure/supabase/server"
-    );
+    const { createServerClient } =
+      await import("@/shared/infrastructure/supabase/server");
 
     await bootstrapUserWorkspace();
 

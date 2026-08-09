@@ -29,7 +29,10 @@ export async function resetPasswordAction(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { error: "El enlace de recuperación expiró o no es válido. Solicitá uno nuevo." };
+    return {
+      error:
+        "El enlace de recuperación expiró o no es válido. Solicitá uno nuevo.",
+    };
   }
 
   const next = (formData.get("password") as string | null) ?? "";

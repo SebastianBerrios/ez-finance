@@ -31,9 +31,7 @@ const URL_UNDER_TEST = "http://localhost:3000/api/cron/process-deletions";
 function request(authorization?: string) {
   return new Request(
     URL_UNDER_TEST,
-    authorization === undefined
-      ? undefined
-      : { headers: { authorization } },
+    authorization === undefined ? undefined : { headers: { authorization } },
   );
 }
 
@@ -143,7 +141,10 @@ describe("GET /api/cron/process-deletions", () => {
 
     const response = await GET(request(`Bearer ${SECRET}`));
 
-    expect(await response.json()).toMatchObject({ drained: false, contended: 5 });
+    expect(await response.json()).toMatchObject({
+      drained: false,
+      contended: 5,
+    });
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("contended 5"),
     );

@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
   // No account is created or modified. Redirect to login with a generic indicator.
   // §8 / REQ-OAUTH-05: cancel mid-flow → back to sign-in, no account touched.
   if (errorParam) {
-    return NextResponse.redirect(new URL("/login?error=oauth_cancelled", origin));
+    return NextResponse.redirect(
+      new URL("/login?error=oauth_cancelled", origin),
+    );
   }
 
   if (!code) {
@@ -43,7 +45,10 @@ export async function GET(request: NextRequest) {
   // from a prior login or DB trigger. Log only in dev.
   const bootstrapResult = await bootstrapUserWorkspace();
   if (!bootstrapResult.ok && process.env.NODE_ENV === "development") {
-    console.warn("[auth/callback] bootstrapUserWorkspace failed:", bootstrapResult.error);
+    console.warn(
+      "[auth/callback] bootstrapUserWorkspace failed:",
+      bootstrapResult.error,
+    );
   }
 
   // The grace window expired and this sign-in is what erased the data. Sending
