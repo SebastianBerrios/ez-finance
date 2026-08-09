@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
+import { listGoalsWithPace } from "@/modules/goals/application/list-goals-with-pace";
 import { SupabaseGoalAdapter } from "@/modules/goals/infrastructure/supabase-goal-adapter";
 import { GoalCreator } from "@/modules/goals/ui/components/goal-creator";
 import { GoalList } from "@/modules/goals/ui/components/goal-list";
@@ -33,8 +34,13 @@ export default async function GoalsPage() {
     redirect("/app");
   }
 
+  // `today` resolved on the SERVER and threaded through, so the pace shown here and
+  // the one the dashboard alerts on are the same judgement made once.
   const [goals, accounts] = await Promise.all([
-    new SupabaseGoalAdapter().listWithProgress(current.value.workspaceId),
+    listGoalsWithPace(
+      { workspaceId: current.value.workspaceId, today: new Date() },
+      { goals: new SupabaseGoalAdapter() },
+    ),
     new SupabaseAccountAdapter().listWithBalances(current.value.workspaceId),
   ]);
 
