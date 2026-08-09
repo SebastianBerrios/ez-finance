@@ -70,7 +70,6 @@ Los archivos .json conservan los tipos originales; los .csv se pueden abrir
 con cualquier planilla de cálculo.
 `;
 
-
 /** YYYY-MM-DD in UTC — stable regardless of the server's timezone. */
 function exportDate(now: Date): string {
   return now.toISOString().slice(0, 10);

@@ -25,7 +25,7 @@ describe("toCsvValue", () => {
     // The reason this module exists. A category named =HYPERLINK(...) is a
     // clickable payload in every major spreadsheet, and quoting does not stop it:
     // the quotes are removed before the cell is interpreted.
-    expect(toCsvValue("=1+1")).toBe("'=1+1")
+    expect(toCsvValue("=1+1")).toBe("'=1+1");
     expect(toCsvValue("@SUM(1+1)")).toBe("'@SUM(1+1)");
     expect(toCsvValue("+49 351 0000")).toBe("'+49 351 0000");
     expect(toCsvValue("-cmd")).toBe("'-cmd");
