@@ -864,6 +864,12 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     // The engine has been able to emit per-category alerts since it was written and
     // nothing could ever configure one. What has to hold end to end: the number typed
     // here reaches the database, and the DASHBOARD acts on it.
+    //
+    // BACK TO THE BUDGET PAGE FIRST. The section above ends on /app, and this one was
+    // written when it opened with its own navigation — hoisting the shared income-mode
+    // reset to the top of both sections took that goto with it, and the click then
+    // waited three minutes for text that only exists here. Caught by CI on main.
+    await page.goto("/app/presupuesto");
     await page.getByText(/límites por categoría/i).click();
 
     const petsLimit = page.locator(
