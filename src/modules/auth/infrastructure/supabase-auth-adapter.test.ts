@@ -135,7 +135,9 @@ describe("SupabaseAuthAdapter transactional-email redirects", () => {
   });
 
   it("requestPasswordRecovery points the link at this deployment's exchange route", async () => {
-    await makeAdapter().requestPasswordRecovery(makeEmail("someone@example.com"));
+    await makeAdapter().requestPasswordRecovery(
+      makeEmail("someone@example.com"),
+    );
 
     expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
       "someone@example.com",
@@ -161,7 +163,9 @@ describe("SupabaseAuthAdapter transactional-email redirects", () => {
     // hardcoding any one of them re-creates the shared-Site-URL bug.
     mockGetRequestOrigin.mockResolvedValue("http://localhost:3000");
 
-    await makeAdapter().requestPasswordRecovery(makeEmail("someone@example.com"));
+    await makeAdapter().requestPasswordRecovery(
+      makeEmail("someone@example.com"),
+    );
 
     expect(mockResetPasswordForEmail).toHaveBeenCalledWith(
       "someone@example.com",
@@ -250,12 +254,16 @@ describe("SupabaseAuthAdapter.initiateGoogleLogin", () => {
     });
 
     const adapter = makeAdapter();
-    const result = await adapter.initiateGoogleLogin("https://myapp.com/auth/callback");
+    const result = await adapter.initiateGoogleLogin(
+      "https://myapp.com/auth/callback",
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
       // Generic error — no Supabase detail leaked
-      expect(["Unavailable", "AuthenticationFailed"]).toContain(result.error.kind);
+      expect(["Unavailable", "AuthenticationFailed"]).toContain(
+        result.error.kind,
+      );
     }
   });
 
@@ -266,7 +274,9 @@ describe("SupabaseAuthAdapter.initiateGoogleLogin", () => {
     });
 
     const adapter = makeAdapter();
-    const result = await adapter.initiateGoogleLogin("https://myapp.com/auth/callback");
+    const result = await adapter.initiateGoogleLogin(
+      "https://myapp.com/auth/callback",
+    );
 
     expect(result.ok).toBe(false);
   });
@@ -275,7 +285,9 @@ describe("SupabaseAuthAdapter.initiateGoogleLogin", () => {
     mockSignInWithOAuth.mockRejectedValueOnce(new Error("network failure"));
 
     const adapter = makeAdapter();
-    const result = await adapter.initiateGoogleLogin("https://myapp.com/auth/callback");
+    const result = await adapter.initiateGoogleLogin(
+      "https://myapp.com/auth/callback",
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -286,11 +298,16 @@ describe("SupabaseAuthAdapter.initiateGoogleLogin", () => {
   it("does not leak Supabase error details in the returned error", async () => {
     mockSignInWithOAuth.mockResolvedValueOnce({
       data: { url: null },
-      error: { code: "provider_disabled", message: "Google provider not enabled" },
+      error: {
+        code: "provider_disabled",
+        message: "Google provider not enabled",
+      },
     });
 
     const adapter = makeAdapter();
-    const result = await adapter.initiateGoogleLogin("https://myapp.com/auth/callback");
+    const result = await adapter.initiateGoogleLogin(
+      "https://myapp.com/auth/callback",
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -356,7 +373,10 @@ describe("SupabaseAuthAdapter.changePassword", () => {
     const adapter = makeAdapter();
     const logoutSpy = vi.spyOn(adapter, "logout");
 
-    const result = await adapter.changePassword(null, makePassword("N3wPassw0rd!"));
+    const result = await adapter.changePassword(
+      null,
+      makePassword("N3wPassw0rd!"),
+    );
 
     expect(result.ok).toBe(true);
     expect(logoutSpy).toHaveBeenCalledWith("others");
@@ -388,7 +408,9 @@ describe("SupabaseAuthAdapter.changePassword", () => {
     // The password IS changed. Failing the whole operation would tell the user
     // to try again with a password that already works. But a silent failure
     // leaves stolen sessions alive on a credential the user believes rotated.
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     mockSignOut.mockResolvedValue({ error: { message: "boom" } });
 
     const result = await makeAdapter().changePassword(
@@ -460,7 +482,9 @@ describe("SupabaseAuthAdapter.completeOAuth", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       // Maps to AuthenticationFailed (generic, non-enumerating)
-      expect(["AuthenticationFailed", "Unavailable"]).toContain(result.error.kind);
+      expect(["AuthenticationFailed", "Unavailable"]).toContain(
+        result.error.kind,
+      );
     }
   });
 
@@ -480,7 +504,9 @@ describe("SupabaseAuthAdapter.completeOAuth", () => {
   });
 
   it("returns err(Unavailable) on thrown exception", async () => {
-    mockExchangeCodeForSession.mockRejectedValueOnce(new Error("network error"));
+    mockExchangeCodeForSession.mockRejectedValueOnce(
+      new Error("network error"),
+    );
 
     const adapter = makeAdapter();
     const result = await adapter.completeOAuth("any-code");
@@ -494,7 +520,10 @@ describe("SupabaseAuthAdapter.completeOAuth", () => {
   it("does not leak Supabase error details in the returned error", async () => {
     mockExchangeCodeForSession.mockResolvedValueOnce({
       data: { session: null },
-      error: { code: "some_internal_code", message: "provider rejected the code" },
+      error: {
+        code: "some_internal_code",
+        message: "provider rejected the code",
+      },
     });
 
     const adapter = makeAdapter();

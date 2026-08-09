@@ -6,25 +6,37 @@ import { LoginForm, type LoginFormState } from "./login-form";
 
 // Stub next/link — jsdom has no router
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
+  default: ({
+    children,
+    href,
+  }: {
+    children: React.ReactNode;
+    href: string;
+  }) => <a href={href}>{children}</a>,
 }));
 
 describe("LoginForm — render and structure", () => {
   it("renders email input with correct label", () => {
     render(<LoginForm action={vi.fn()} />);
-    expect(screen.getByLabelText(/correo electrónico/i)).toHaveAttribute("type", "email");
+    expect(screen.getByLabelText(/correo electrónico/i)).toHaveAttribute(
+      "type",
+      "email",
+    );
   });
 
   it("renders password input with correct label", () => {
     render(<LoginForm action={vi.fn()} />);
-    expect(screen.getByLabelText(/contraseña/i)).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText(/contraseña/i)).toHaveAttribute(
+      "type",
+      "password",
+    );
   });
 
   it("renders submit button in Spanish", () => {
     render(<LoginForm action={vi.fn()} />);
-    expect(screen.getByRole("button", { name: /ingresar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /ingresar/i }),
+    ).toBeInTheDocument();
   });
 
   it("email input has correct autocomplete attribute", () => {

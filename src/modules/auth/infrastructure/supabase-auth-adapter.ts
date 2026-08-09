@@ -65,7 +65,10 @@ export class SupabaseAuthAdapter implements AuthPort {
         // ConflictOrRejected from a duplicate email must not be forwarded
         // (that would be an enumeration oracle). Map it to ok to match the
         // "check your inbox" non-enumerating UX.
-        if (mapped.kind === "ConflictOrRejected" || mapped.kind === "AuthenticationFailed") {
+        if (
+          mapped.kind === "ConflictOrRejected" ||
+          mapped.kind === "AuthenticationFailed"
+        ) {
           return ok(undefined);
         }
         return err(mapped);
@@ -165,7 +168,9 @@ export class SupabaseAuthAdapter implements AuthPort {
   // an explicit redirectTo is not optional: without it the recovery mail points
   // at the shared Site URL and the user never reaches ez finance's form.
   // ---------------------------------------------------------------------------
-  async requestPasswordRecovery(email: Email): Promise<Result<void, AuthError>> {
+  async requestPasswordRecovery(
+    email: Email,
+  ): Promise<Result<void, AuthError>> {
     try {
       const supabase = await createServerClient();
       const origin = await getRequestOrigin();

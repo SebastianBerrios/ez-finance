@@ -152,7 +152,9 @@ describe("ExportAdapter.exportUserData", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const parsed: unknown = JSON.parse(readZip(result.value.bytes).text("perfil.json"));
+    const parsed: unknown = JSON.parse(
+      readZip(result.value.bytes).text("perfil.json"),
+    );
     expect(parsed).toMatchObject({
       display_name: "Ana Pérez",
       default_currency: "ARS",
@@ -164,7 +166,10 @@ describe("ExportAdapter.exportUserData", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const csv = readZip(result.value.bytes).text("espacios.csv").trim().split("\n");
+    const csv = readZip(result.value.bytes)
+      .text("espacios.csv")
+      .trim()
+      .split("\n");
     expect(csv[0]).toBe("id,name,type,created_at,archived_at,deleted_at");
     expect(csv[1]).toContain("Personal");
     expect(csv).toHaveLength(2);

@@ -24,7 +24,9 @@ describe("LogoutButton", () => {
     // safe. On success the action redirects and nothing is rendered here.
     const user = userEvent.setup();
     render(
-      <LogoutButton action={makeAction({ error: "No pudimos cerrar tu sesión." })} />,
+      <LogoutButton
+        action={makeAction({ error: "No pudimos cerrar tu sesión." })}
+      />,
     );
 
     await user.click(screen.getByRole("button", { name: /cerrar sesión/i }));

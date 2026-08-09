@@ -77,7 +77,10 @@ describe("transactionDraft.create", () => {
   it("rejects a leap day that does not", () => {
     // 2026 is not a leap year. A regex alone would let this through, which is why
     // the check round-trips through a real date.
-    const result = transactionDraft.create({ ...VALID, occurredOn: "2026-02-29" });
+    const result = transactionDraft.create({
+      ...VALID,
+      occurredOn: "2026-02-29",
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("InvalidDate");
