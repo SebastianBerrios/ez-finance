@@ -13,12 +13,16 @@ import {
   type ExportPort,
 } from "@/modules/auth/application/ports/export-port";
 import { type AuthError } from "@/modules/auth/domain/auth-error";
+import { type CsvRow, toCsv } from "@/shared/domain/csv";
 import { type Result, err, ok } from "@/shared/domain/result";
 import { createServerClient } from "@/shared/infrastructure/supabase/server";
 
 import { mapSupabaseError } from "./error-map";
 
-type Row = Record<string, unknown>;
+// The CSV writer moved to shared/domain/csv.ts when the reports export needed one
+// too: boundaries forbid another module importing this file, so the alternative was
+// a second escaper that would have had to re-derive the formula-injection rules.
+type Row = CsvRow;
 
 /**
  * Column lists are explicit (not `select *`) so the CSV header and column
@@ -65,42 +69,6 @@ exportación. Cada conjunto de datos viene en dos formatos:
 Los archivos .json conservan los tipos originales; los .csv se pueden abrir
 con cualquier planilla de cálculo.
 `;
-
-/**
- * Excel, LibreOffice and Google Sheets evaluate a cell whose FIRST character is
- * one of these as a formula — and LEEME.txt tells the user to open these files
- * in a spreadsheet. A display_name of `=HYPERLINK(...)` or `@SUM(...)` coming
- * from another workspace member would then execute on open. RFC 4180 quoting
- * does not help: the quotes are stripped before the value is interpreted.
- */
-const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
-
-/** RFC 4180 quoting: only when needed, doubling embedded quotes. */
-function toCsvValue(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  // ONLY strings are neutralised. Stringifying first turned a numeric -1234
-  // into the text '-1234, which a spreadsheet then refuses to sum, sort or
-  // chart — every exported amount silently became text. The injection risk
-  // only exists for values a person can type; a number cannot carry a formula.
-  const isText = typeof value === "string";
-  const raw = isText ? value : String(value);
-  // A leading apostrophe is the standard neutraliser: spreadsheets read the
-  // cell as literal text and do not render the quote. The .json files keep the
-  // untouched value, so nothing is lost from the export.
-  const text = isText && CSV_FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
-  if (/[",\n\r]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
-
-function toCsv(columns: readonly string[], rows: readonly Row[]): string {
-  const header = columns.join(",");
-  const body = rows.map((row) =>
-    columns.map((column) => toCsvValue(row[column])).join(","),
-  );
-  return [header, ...body].join("\n") + "\n";
-}
 
 /** YYYY-MM-DD in UTC — stable regardless of the server's timezone. */
 function exportDate(now: Date): string {

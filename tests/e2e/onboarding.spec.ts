@@ -407,6 +407,43 @@ test.describe("Onboarding wizard (needs a live LOCAL Supabase stack)", () => {
     await page.goto("/app/reportes?mes=no-es-un-mes");
     await expect(page.getByText("Supermercado").first()).toBeVisible();
 
+    // --- the exports -------------------------------------------------------
+    // Asserted HERE because this is the one spec with a known month: income 1000 and
+    // a single expense of 150.50 against Supermercado, a need. That makes the CSV
+    // checkable line by line rather than "it downloaded something".
+    const csvResponse = await page.request.get("/app/reportes/export");
+    expect(csvResponse.status()).toBe(200);
+    expect(csvResponse.headers()["content-type"]).toContain("text/csv");
+    expect(
+      csvResponse.headers()["content-disposition"],
+      "sent as an attachment with a dated filename, or the browser shows it as text",
+    ).toMatch(/attachment; filename="ez-finance-reporte-\d{4}-\d{2}\.csv"/);
+
+    const csv = await csvResponse.text();
+
+    expect(csv.trim().split("\n")[0]).toBe(
+      "mes,seccion,concepto,cubo,monto,moneda",
+    );
+    // Decimal text, not minor units — 1000.00 rather than 100000, which is the
+    // difference between a column someone can sum and one they must divide first.
+    expect(csv).toContain("resumen,Ingreso,,1000.00,PEN");
+    expect(csv).toContain("resumen,Gasto,,150.50,PEN");
+    expect(csv).toContain("cubo,Necesidades,need,150.50,PEN");
+    // Present at zero, so a formula can rely on the row existing.
+    expect(csv).toContain("cubo,Sin cubo,,0.00,PEN");
+    expect(csv).toContain("categoria,Supermercado,need,150.50,PEN");
+
+    // The printable view, which is HOW the PDF is produced: the browser's own
+    // "Guardar como PDF" over this page, with no server-side renderer.
+    await page.goto("/app/reportes/imprimir");
+    await expect(
+      page.getByRole("heading", { name: /^reporte de /i }),
+    ).toBeVisible();
+    await expect(page.getByText(/S\/\s*150\.50/).first()).toBeVisible();
+    await expect(page.getByText("Supermercado").first()).toBeVisible();
+    // The instruction is on screen; it is what tells someone how to get the PDF.
+    await expect(page.getByText(/guardar como pdf/i)).toBeVisible();
+
     await page.goto("/app");
 
     // --- deleting it puts the money back -----------------------------------
