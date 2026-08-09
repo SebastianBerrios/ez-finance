@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { ChangeEmailForm, type ChangeEmailFormState } from "./change-email-form";
+import {
+  ChangeEmailForm,
+  type ChangeEmailFormState,
+} from "./change-email-form";
 
 describe("ChangeEmailForm — render and structure", () => {
   it("renders email input with correct label", () => {
@@ -79,7 +82,8 @@ describe("ChangeEmailForm — success and error display", () => {
 
   it("shows generic error message — never reveals if email is taken", () => {
     const action = vi.fn().mockResolvedValue({
-      error: "No pudimos actualizar tu correo. Verificá el formato e intentá de nuevo.",
+      error:
+        "No pudimos actualizar tu correo. Verificá el formato e intentá de nuevo.",
     } as ChangeEmailFormState);
 
     render(<ChangeEmailForm action={action} />);

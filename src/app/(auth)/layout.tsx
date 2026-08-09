@@ -15,7 +15,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <h1 className="text-foreground text-2xl font-bold tracking-tight">
           ez finance
         </h1>
-        <p className="text-muted-foreground mt-1 text-sm">Tus finanzas, claras.</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Tus finanzas, claras.
+        </p>
       </div>
 
       {/* Auth card */}

@@ -56,7 +56,9 @@ export async function createAccountAction(
       case "UnsupportedCurrency":
         return { error: "Esa moneda no está disponible." };
       case "NotPermitted":
-        return { error: "No tienes permiso para crear cuentas en este espacio." };
+        return {
+          error: "No tienes permiso para crear cuentas en este espacio.",
+        };
       case "WorkspaceNotFound":
         return { error: "No encontramos tu espacio financiero." };
       default:

@@ -59,7 +59,9 @@ describe("GoogleButton — render and accessibility", () => {
     mockSignInWithOAuth.mockReturnValueOnce(new Promise(() => {}));
 
     renderButton();
-    const button = screen.getByRole("button", { name: /continuar con google/i });
+    const button = screen.getByRole("button", {
+      name: /continuar con google/i,
+    });
     fireEvent.click(button);
 
     await waitFor(() => {

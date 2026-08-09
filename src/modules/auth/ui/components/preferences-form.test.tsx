@@ -35,7 +35,9 @@ describe("PreferencesForm — render and structure", () => {
 
   it("pre-fills currency from initialCurrency prop", () => {
     render(<PreferencesForm action={vi.fn()} initialCurrency="USD" />);
-    const select = screen.getByLabelText(/moneda principal/i) as HTMLSelectElement;
+    const select = screen.getByLabelText(
+      /moneda principal/i,
+    ) as HTMLSelectElement;
     expect(select.value).toBe("USD");
   });
 
