@@ -25,6 +25,10 @@
 #      container's own address falls under the scram rule. Invoked over the socket it
 #      fails with a message that reads like a code bug and is not one.
 #
+#      `hostname -i` can return SEVERAL addresses (IPv4 and IPv6), and it does on the
+#      GitHub runner even though it returns one locally — which passed here and failed
+#      there, feeding psql two hosts in a single -h. Only the first is used.
+#
 # Each suite gets a fresh database because they insert their own fixtures into
 # auth.users and deliberately do not clean up (see supabase/tests/README.md).
 #
@@ -57,9 +61,10 @@ for file in "${suites[@]}"; do
   docker cp "$file" "$CONTAINER:/tmp/t.sql" >/dev/null
 
   if [ "$name" = "deletion_deadlock" ]; then
-    # See note 3: dblink needs a real password, so the connection must be TCP.
+    # See note 3: dblink needs a real password, so the connection must be TCP, and
+    # only the FIRST address of `hostname -i` is usable.
     output="$(docker exec -e PGPASSWORD=postgres "$CONTAINER" \
-      sh -c 'psql -h "$(hostname -i)" -U postgres -d postgres -f /tmp/t.sql' 2>&1 || true)"
+      sh -c 'psql -h "$(hostname -i | cut -d" " -f1)" -U postgres -d postgres -f /tmp/t.sql' 2>&1 || true)"
   else
     output="$(docker exec "$CONTAINER" \
       psql -U postgres -d postgres -f /tmp/t.sql 2>&1 || true)"
@@ -75,7 +80,15 @@ for file in "${suites[@]}"; do
     total_checks=$((total_checks + checks))
   else
     printf 'FAIL  %-24s\n' "$name"
+    # The matching lines first: a suite that failed an EXPECTATION says so in one line,
+    # and that line is the whole answer.
     grep -E 'FAIL|ERROR' <<<"$output" | head -5 || true
+    # Then the tail, UNCONDITIONALLY. The first version printed only the grep matches,
+    # and the first real CI failure produced none of them — a suite that cannot connect
+    # at all says nothing this pattern matches, so the run reported "FAIL" and no
+    # reason, which is the one thing a test runner must never do.
+    echo "      --- last lines of output ---"
+    tail -15 <<<"$output" | sed 's/^/      /'
     failed+=("$name")
   fi
 done
