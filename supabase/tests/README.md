@@ -9,14 +9,27 @@ expectation.
 
 ## Running them
 
-The scripts assume a freshly reset local stack (they insert their own fixtures
-into `auth.users` and do not clean up):
+```bash
+./scripts/sql-tests.sh              # every suite
+./scripts/sql-tests.sh goals        # one, by name
+```
+
+The script resets the database between suites, copies each file into the
+container and picks the right invocation for it. Prefer it over doing this by
+hand: it discovers suites with a glob, so a new file here runs automatically —
+and CI runs the same script, so "it passes locally" and "it passes on the pull
+request" mean the same thing.
+
+For reference, what it does per suite:
 
 ```bash
 pnpm exec supabase db reset
 docker cp supabase/tests/account_deletion.sql supabase_db_ez-finance:/tmp/t.sql
 MSYS_NO_PATHCONV=1 docker exec supabase_db_ez-finance psql -U postgres -d postgres -f /tmp/t.sql
 ```
+
+The reset comes FIRST: it restarts the containers, which wipes `/tmp`, so a file
+copied before it is gone by the time psql looks.
 
 A successful run ends with `ALL CHECKS PASSED`; any failure aborts with
 `ERROR: FAIL: <expectation>`. `MSYS_NO_PATHCONV=1` matters on Git Bash for

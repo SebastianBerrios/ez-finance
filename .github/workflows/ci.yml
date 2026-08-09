@@ -1,0 +1,145 @@
+# Verification gates.
+#
+# WHY THIS EXISTS. Until now the only thing that ran on a pull request was Vercel's
+# build. A build proves the app compiles; it does not run the typechecker in strict
+# mode, the linter, prettier, the 837 unit tests, the 9 database suites or the 29
+# browser tests. Every one of those was run by hand, which means every one of them
+# could be skipped by forgetting — and one was: account_deletion.sql had been failing
+# on main for ten days, correctly reporting a real production regression that nobody
+# had asked it about.
+#
+# The jobs are split by what they need, not by category. `static` needs only Node, so
+# it answers in about a minute and catches most mistakes. `integration` needs a whole
+# Postgres with Supabase's roles, auth schema and RLS helpers — which is why it starts
+# the real local stack instead of a bare postgres service: these suites impersonate
+# `authenticated` and `anon` with JWT claims and read auth.users, none of which exists
+# in a plain container.
+#
+# Both jobs run on every pull request AND on pushes to main. Main is protected by
+# nothing else, and a green PR that goes red once merged is a thing that should be
+# visible immediately rather than at the next PR.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: types, lint, format, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the version this repo is developed on. Pinned rather than
+          # "latest": a Node bump is a change worth making deliberately, not one that
+          # arrives on an unrelated pull request.
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Ordered cheapest-first so the fastest failure is the one reported soonest.
+      # None of them are `continue-on-error`: a gate that reports and does not block
+      # is a gate people learn to scroll past.
+      - name: Prettier
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+  integration:
+    name: database suites and browser tests
+    runs-on: ubuntu-latest
+    # Generous, because it starts a full Supabase stack and builds the app, but
+    # bounded: a hung `supabase start` should fail rather than burn the runner.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # The stack this repo's config.toml describes: the ports, the auth redirect
+      # allow-list and the migrations. Started once and shared by both steps below,
+      # because starting it twice would double the slowest part of the job.
+      #
+      # The Google OAuth variables are referenced by config.toml; the CLI refuses to
+      # read the file without them and no test signs in with Google.
+      - name: Start Supabase
+        env:
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
+        run: supabase start
+
+      - name: Database suites
+        env:
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
+        run: ./scripts/sql-tests.sh
+
+      # THE PRECONDITION THE SPECS GATE ON, asserted before they run.
+      #
+      # Every data-touching spec calls test.skip() unless the resolved Supabase URL is
+      # a loopback one — a deliberate safety device, since those specs register and
+      # erase users and must never reach the shared hosted project. The cost is that a
+      # misconfigured stack produces a GREEN run that tested nothing at all.
+      #
+      # Checking the URL directly is the honest guard: if it is local, the specs
+      # cannot skip. (Grepping the test list for a count was the first version of this
+      # and it asserted the shape of a reporter's output, not the thing that matters.)
+      - name: Confirm the local stack is the one under test
+        env:
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
+        run: |
+          url="$(supabase status -o json | jq -r '.API_URL')"
+          echo "API_URL=$url"
+          case "$url" in
+            http://127.0.0.1:*|http://localhost:*) echo "local stack confirmed" ;;
+            *) echo "Not a local stack — the gated specs would silently skip."; exit 1 ;;
+          esac
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser tests
+        env:
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
+          SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
+        run: pnpm exec playwright test --reporter=line
+
+      - uses: actions/upload-artifact@v4
+        # Only on failure: a passing run's report is noise, and a failing one is the
+        # only way to see what the browser saw.
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
