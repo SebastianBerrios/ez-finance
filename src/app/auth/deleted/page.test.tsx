@@ -41,7 +41,10 @@ let consoleError: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.clearAllMocks();
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-  mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id: USER_ID } },
+    error: null,
+  });
   mockRpc.mockResolvedValue({
     data: { state: "DELETED", finalized_at: "2026-07-25T10:00:00.000Z" },
     error: null,
@@ -56,7 +59,9 @@ describe("/auth/deleted", () => {
   it("shows the notice and asks the person to confirm, mutating nothing", async () => {
     render(await DeletedPage());
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/eliminamos tus datos/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /eliminamos tus datos/i,
+    );
     expect(
       screen.getByRole("button", { name: /cerrar sesión/i }),
     ).toBeInTheDocument();

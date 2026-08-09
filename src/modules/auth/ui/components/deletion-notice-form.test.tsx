@@ -17,7 +17,9 @@ describe("DeletionNoticeForm", () => {
   it("tells the person their data is gone", () => {
     render(<DeletionNoticeForm action={makeAction()} />);
 
-    expect(screen.getByRole("alert")).toHaveTextContent(/eliminamos tus datos/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /eliminamos tus datos/i,
+    );
   });
 
   it("does nothing until the person confirms", () => {

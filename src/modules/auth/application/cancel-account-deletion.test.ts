@@ -5,7 +5,9 @@ import { ok, err } from "@/shared/domain/result";
 import { cancelAccountDeletion } from "./cancel-account-deletion";
 import { type DeletionPort } from "./ports/deletion-port";
 
-function makeFakeDeletionPort(overrides: Partial<DeletionPort> = {}): DeletionPort {
+function makeFakeDeletionPort(
+  overrides: Partial<DeletionPort> = {},
+): DeletionPort {
   return {
     getState: vi.fn().mockResolvedValue(ok("GRACE_PERIOD")),
     request: vi.fn().mockResolvedValue(ok(undefined)),

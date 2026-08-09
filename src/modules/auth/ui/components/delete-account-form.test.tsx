@@ -72,7 +72,9 @@ describe("DeleteAccountForm", () => {
     render(<DeleteAccountForm action={action} />);
 
     await user.type(screen.getByLabelText(/escribí/i), "ELIMINAR");
-    await user.click(screen.getByRole("button", { name: /eliminar mi cuenta/i }));
+    await user.click(
+      screen.getByRole("button", { name: /eliminar mi cuenta/i }),
+    );
 
     expect(action).toHaveBeenCalledTimes(1);
     const formData = action.mock.calls[0]?.[1];
@@ -81,7 +83,9 @@ describe("DeleteAccountForm", () => {
 
   it("shows no alert before the first submit", () => {
     render(
-      <DeleteAccountForm action={makeAction({ error: "No pudimos procesarlo." })} />,
+      <DeleteAccountForm
+        action={makeAction({ error: "No pudimos procesarlo." })}
+      />,
     );
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -93,7 +97,9 @@ describe("DeleteAccountForm", () => {
     render(<DeleteAccountForm action={action} />);
 
     await user.type(screen.getByLabelText(/escribí/i), "ELIMINAR");
-    await user.click(screen.getByRole("button", { name: /eliminar mi cuenta/i }));
+    await user.click(
+      screen.getByRole("button", { name: /eliminar mi cuenta/i }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /no pudimos procesar la solicitud/i,

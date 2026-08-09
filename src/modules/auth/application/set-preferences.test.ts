@@ -15,12 +15,16 @@ function makeProfile(): UserProfile {
   };
 }
 
-function makeFakeProfilePort(overrides: Partial<ProfilePort> = {}): ProfilePort {
+function makeFakeProfilePort(
+  overrides: Partial<ProfilePort> = {},
+): ProfilePort {
   return {
     getProfile: vi.fn().mockResolvedValue(ok(makeProfile())),
     updateProfile: vi.fn().mockResolvedValue(ok(makeProfile())),
     setPreferences: vi.fn().mockResolvedValue(ok(undefined)),
-    uploadAvatar: vi.fn().mockResolvedValue(ok({ photoUrl: "https://example.com/avatar.jpg" })),
+    uploadAvatar: vi
+      .fn()
+      .mockResolvedValue(ok({ photoUrl: "https://example.com/avatar.jpg" })),
     ...overrides,
   };
 }

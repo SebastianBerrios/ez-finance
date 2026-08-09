@@ -4,19 +4,37 @@ import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { ok, err } from "@/shared/domain/result";
 
 import { changeEmail } from "./change-email";
-import { type AuthPort, type AuthUserRef, type SessionRef } from "./ports/auth-port";
+import {
+  type AuthPort,
+  type AuthUserRef,
+  type SessionRef,
+} from "./ports/auth-port";
 
 function makeFakeAuthPort(overrides: Partial<AuthPort> = {}): AuthPort {
   return {
     register: vi.fn().mockResolvedValue(ok(undefined)),
-    login: vi.fn().mockResolvedValue(ok({ userId: "u1", accessToken: "tok" } satisfies SessionRef)),
-    initiateGoogleLogin: vi.fn().mockResolvedValue(ok({ url: "https://google.com" })),
-    completeOAuth: vi.fn().mockResolvedValue(ok({ userId: "u1", accessToken: "tok" } satisfies SessionRef)),
+    login: vi
+      .fn()
+      .mockResolvedValue(
+        ok({ userId: "u1", accessToken: "tok" } satisfies SessionRef),
+      ),
+    initiateGoogleLogin: vi
+      .fn()
+      .mockResolvedValue(ok({ url: "https://google.com" })),
+    completeOAuth: vi
+      .fn()
+      .mockResolvedValue(
+        ok({ userId: "u1", accessToken: "tok" } satisfies SessionRef),
+      ),
     logout: vi.fn().mockResolvedValue(ok(undefined)),
     requestPasswordRecovery: vi.fn().mockResolvedValue(ok(undefined)),
     changePassword: vi.fn().mockResolvedValue(ok(undefined)),
     changeEmail: vi.fn().mockResolvedValue(ok(undefined)),
-    getCurrentUser: vi.fn().mockResolvedValue(ok({ id: "u1", email: "a@b.com" } satisfies AuthUserRef)),
+    getCurrentUser: vi
+      .fn()
+      .mockResolvedValue(
+        ok({ id: "u1", email: "a@b.com" } satisfies AuthUserRef),
+      ),
     ...overrides,
   };
 }
@@ -24,7 +42,10 @@ function makeFakeAuthPort(overrides: Partial<AuthPort> = {}): AuthPort {
 describe("changeEmail use case", () => {
   it("returns ok when new email is valid", async () => {
     const auth = makeFakeAuthPort();
-    const result = await changeEmail({ next: "newemail@example.com" }, { auth });
+    const result = await changeEmail(
+      { next: "newemail@example.com" },
+      { auth },
+    );
     expect(result.ok).toBe(true);
     expect(auth.changeEmail).toHaveBeenCalledOnce();
   });
@@ -41,7 +62,9 @@ describe("changeEmail use case", () => {
     const auth = makeFakeAuthPort({
       changeEmail: vi
         .fn()
-        .mockResolvedValue(err({ kind: "ConflictOrRejected" } satisfies AuthError)),
+        .mockResolvedValue(
+          err({ kind: "ConflictOrRejected" } satisfies AuthError),
+        ),
     });
     const result = await changeEmail({ next: "taken@example.com" }, { auth });
     expect(result.ok).toBe(false);

@@ -96,8 +96,7 @@ function create(
     accountId,
   };
 
-  const withCategory =
-    categoryId.length === 0 ? base : { ...base, categoryId };
+  const withCategory = categoryId.length === 0 ? base : { ...base, categoryId };
 
   return ok(
     Object.freeze(note.length === 0 ? withCategory : { ...withCategory, note }),

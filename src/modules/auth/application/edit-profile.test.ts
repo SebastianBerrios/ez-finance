@@ -6,7 +6,9 @@ import { ok, err } from "@/shared/domain/result";
 import { editProfile } from "./edit-profile";
 import { type ProfilePort, type AvatarFile } from "./ports/profile-port";
 
-function makeProfile(overrides: Partial<Omit<UserProfile, "_brand">> = {}): UserProfile {
+function makeProfile(
+  overrides: Partial<Omit<UserProfile, "_brand">> = {},
+): UserProfile {
   return {
     _brand: "UserProfile",
     displayName: "Test User",
@@ -16,12 +18,16 @@ function makeProfile(overrides: Partial<Omit<UserProfile, "_brand">> = {}): User
   };
 }
 
-function makeFakeProfilePort(overrides: Partial<ProfilePort> = {}): ProfilePort {
+function makeFakeProfilePort(
+  overrides: Partial<ProfilePort> = {},
+): ProfilePort {
   return {
     getProfile: vi.fn().mockResolvedValue(ok(makeProfile())),
     updateProfile: vi.fn().mockResolvedValue(ok(makeProfile())),
     setPreferences: vi.fn().mockResolvedValue(ok(undefined)),
-    uploadAvatar: vi.fn().mockResolvedValue(ok({ photoUrl: "https://example.com/avatar.jpg" })),
+    uploadAvatar: vi
+      .fn()
+      .mockResolvedValue(ok({ photoUrl: "https://example.com/avatar.jpg" })),
     ...overrides,
   };
 }
@@ -43,7 +49,11 @@ describe("editProfile use case", () => {
   });
 
   it("uploads avatar when file is provided", async () => {
-    const file: AvatarFile = { bytes: new Uint8Array([1, 2, 3]), mime: "image/png", size: 3 };
+    const file: AvatarFile = {
+      bytes: new Uint8Array([1, 2, 3]),
+      mime: "image/png",
+      size: 3,
+    };
     const profile = makeFakeProfilePort();
 
     const result = await editProfile(
@@ -58,13 +68,20 @@ describe("editProfile use case", () => {
     const profile = makeFakeProfilePort({
       updateProfile: vi.fn().mockResolvedValue(err({ kind: "Unavailable" })),
     });
-    const result = await editProfile({ userId: "u1", displayName: "New" }, { profile });
+    const result = await editProfile(
+      { userId: "u1", displayName: "New" },
+      { profile },
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("Unavailable");
   });
 
   it("propagates avatar upload error without calling updateProfile", async () => {
-    const file: AvatarFile = { bytes: new Uint8Array([1, 2, 3]), mime: "image/png", size: 3 };
+    const file: AvatarFile = {
+      bytes: new Uint8Array([1, 2, 3]),
+      mime: "image/png",
+      size: 3,
+    };
     const profile = makeFakeProfilePort({
       uploadAvatar: vi.fn().mockResolvedValue(err({ kind: "Unavailable" })),
     });

@@ -7,9 +7,10 @@ import { ProfileForm, type ProfileFormState } from "./profile-form";
 describe("ProfileForm — render and structure", () => {
   it("renders display name input with correct label", () => {
     render(<ProfileForm action={vi.fn()} />);
-    expect(
-      screen.getByLabelText(/nombre para mostrar/i),
-    ).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText(/nombre para mostrar/i)).toHaveAttribute(
+      "type",
+      "text",
+    );
   });
 
   it("renders submit button in Spanish", () => {

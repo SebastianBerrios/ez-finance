@@ -76,7 +76,10 @@ beforeEach(() => {
   trace.length = 0;
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-  mockGetUser.mockResolvedValue({ data: { user: { id: USER_ID } }, error: null });
+  mockGetUser.mockResolvedValue({
+    data: { user: { id: USER_ID } },
+    error: null,
+  });
   mockGetSession.mockResolvedValue({
     data: { session: { access_token: ACCESS_TOKEN } },
     error: null,
@@ -153,9 +156,8 @@ describe("acknowledgeDeletionAction", () => {
   it("uses the token captured BEFORE the sign-out to acknowledge", async () => {
     // acknowledge_deletion() derives the user from auth.uid(), so it needs a
     // session — and the cookie session is gone by then, on purpose.
-    const { createBearerClient } = await import(
-      "@/shared/infrastructure/supabase/bearer-client"
-    );
+    const { createBearerClient } =
+      await import("@/shared/infrastructure/supabase/bearer-client");
 
     await expect(acknowledgeDeletionAction()).rejects.toThrow("NEXT_REDIRECT");
 
