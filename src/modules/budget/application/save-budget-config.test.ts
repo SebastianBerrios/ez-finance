@@ -6,6 +6,7 @@ import { saveBudgetConfig } from "./save-budget-config";
 function makePort(overrides: Partial<BudgetConfigPort> = {}): BudgetConfigPort {
   return {
     saveFromMonth: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
+    setCategoryLimit: vi.fn().mockResolvedValue({ ok: true, value: undefined }),
     findForMonth: vi.fn().mockResolvedValue({ ok: true, value: null }),
     ...overrides,
   };

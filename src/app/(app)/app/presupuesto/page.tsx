@@ -5,8 +5,12 @@ import { redirect } from "next/navigation";
 import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { BudgetForm } from "@/modules/budget/ui/components/budget-form";
+import { CategoryLimits } from "@/modules/budget/ui/components/category-limits";
+import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
+import { formatMinorUnitsForInput } from "@shared/domain/money-input";
 
 import { saveBudgetAction } from "./save-budget.action";
+import { setCategoryLimitAction } from "./set-category-limit.action";
 
 export const metadata: Metadata = {
   title: "Presupuesto — ez finance",
@@ -61,6 +65,38 @@ export default async function BudgetPage() {
     incomeMode: "mayor",
   };
 
+  // The ceilings, prefilled from what is stored.
+  //
+  // Only EXPENSE categories are offered — the ones with a bucket. A limit on a category
+  // the engine never totals is a field that can be filled and will never produce an
+  // alert, and offering it would be promising something.
+  //
+  // Archived ones are left out too: the picker that records a movement already hides
+  // them, so a ceiling there could only ever govern the past.
+  const categories = await new SupabaseCategoryAdapter().listByWorkspace(
+    current.value.workspaceId,
+  );
+
+  const storedLimit = new Map(
+    (existing.value?.categoryLimits ?? []).map((limit) => [
+      limit.categoryId,
+      limit.limitMinorUnits,
+    ]),
+  );
+
+  const limitOptions = (categories.ok ? categories.value : [])
+    .filter((category) => !category.archived && category.bucket !== null)
+    .map((category) => {
+      const stored = storedLimit.get(category.id);
+      return {
+        id: category.id,
+        name: category.name,
+        // Formatted with the same helper the movement form uses, so a value typed,
+        // saved and reopened comes back identical rather than off by a factor of 100.
+        limit: stored === undefined ? "" : formatMinorUnitsForInput(stored, 2),
+      };
+    });
+
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-6">
       <div>
@@ -81,6 +117,12 @@ export default async function BudgetPage() {
         action={saveBudgetAction}
         currencyLabel="soles"
         initial={initial}
+      />
+
+      <CategoryLimits
+        action={setCategoryLimitAction}
+        categories={limitOptions}
+        currencyLabel="soles"
       />
     </main>
   );

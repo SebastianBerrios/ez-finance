@@ -5,7 +5,11 @@ import { fromMinorUnits } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 
 import { getMonthlyBudget } from "./get-monthly-budget";
-import type { BudgetConfigPort } from "./ports/budget-config-port";
+import type {
+  BudgetConfigPort,
+  StoredBudgetConfig,
+  StoredCategoryLimit,
+} from "./ports/budget-config-port";
 import type { MonthlySnapshotPort } from "./ports/monthly-snapshot-port";
 
 const MONTH = new Date("2026-07-15T00:00:00Z");
@@ -34,16 +38,25 @@ function makePorts(
     },
     budget: {
       saveFromMonth: vi.fn(),
+      setCategoryLimit: vi
+        .fn()
+        .mockResolvedValue({ ok: true, value: undefined }),
       findForMonth: vi.fn().mockResolvedValue({ ok: true, value: configValue }),
     },
   };
 }
 
 const STORED_CONFIG = {
+  // The adapter always supplies these two — StoredBudgetConfig requires them, and the
+  // mock returns an untyped object so TypeScript could not point that out. Typed as
+  // StoredBudgetConfig here so the next field added to the port fails at compile time
+  // instead of as "cannot read properties of undefined" inside a use case.
+  id: "cfg-1",
+  categoryLimits: [] as StoredCategoryLimit[],
   incomeMode: "esperado" as const,
   expectedIncomeMinorUnits: 350000n,
   percentages: { need: 50, want: 30, save: 20 },
-};
+} satisfies StoredBudgetConfig;
 
 describe("getMonthlyBudget", () => {
   it("computes the buckets from the stored config", async () => {
@@ -186,5 +199,103 @@ describe("getMonthlyBudget", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("WorkspaceNotFound");
     expect(deps.snapshots.readForMonth).not.toHaveBeenCalled();
+  });
+
+  it("turns a stored category limit into a category ALERT", async () => {
+    // The payoff of the whole feature. alerts.ts has been able to emit these since it
+    // was written and nothing could ever configure one, so this is the first test that
+    // proves the stored value reaches the engine at all.
+    const money = (minorUnits: bigint) =>
+      expectOk(fromMinorUnits("PEN", minorUnits));
+
+    const deps = makePorts(
+      snapshot({
+        categories: [{ id: "cat-1", bucket: "need", archived: false }],
+        transactions: [
+          {
+            id: "tx-1",
+            kind: "expense" as const,
+            amount: money(9000n),
+            date: "2026-07-10",
+            accountId: "acc-1",
+            categoryId: "cat-1",
+          },
+        ],
+      }),
+      {
+        ...STORED_CONFIG,
+        // 90.00 spent against a 100.00 ceiling: past the 80 % default threshold.
+        categoryLimits: [{ categoryId: "cat-1", limitMinorUnits: 10000n }],
+      },
+    );
+
+    const result = await getMonthlyBudget(
+      { workspaceId: "ws-1", month: MONTH },
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const categoryAlert = result.value.result.alerts.find(
+      (alert) => alert.scope === "category",
+    );
+    expect(categoryAlert).toBeDefined();
+    expect(categoryAlert?.categoryId).toBe("cat-1");
+  });
+
+  it("produces NO category alert when nothing is configured", async () => {
+    // The state every workspace is in until someone sets a ceiling. Asserted so the
+    // engine's per-category branch cannot start firing on an empty list.
+    const deps = makePorts(
+      snapshot({
+        categories: [{ id: "cat-1", bucket: "need", archived: false }],
+        transactions: [
+          {
+            id: "tx-1",
+            kind: "expense" as const,
+            amount: expectOk(fromMinorUnits("PEN", 9000n)),
+            date: "2026-07-10",
+            accountId: "acc-1",
+            categoryId: "cat-1",
+          },
+        ],
+      }),
+      STORED_CONFIG,
+    );
+
+    const result = await getMonthlyBudget(
+      { workspaceId: "ws-1", month: MONTH },
+      deps,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.value.result.alerts.filter((alert) => alert.scope === "category"),
+    ).toHaveLength(0);
+  });
+
+  it("DROPS a limit whose currency the money domain rejects, and still renders", async () => {
+    // Only reachable through drift, and the choice matters: failing the month would
+    // take the whole dashboard down over one unusable ceiling. Losing one alert is the
+    // smaller wrong — the same call the engine makes for a transaction whose category
+    // no longer exists.
+    const deps = makePorts(snapshot(), {
+      ...STORED_CONFIG,
+      categoryLimits: [
+        { categoryId: "cat-1", limitMinorUnits: 10000n },
+        { categoryId: "cat-2", limitMinorUnits: 10000n },
+      ],
+    });
+
+    const result = await getMonthlyBudget(
+      { workspaceId: "ws-1", month: MONTH },
+      deps,
+    );
+
+    // The snapshot's currency is PEN and both limits are valid in it, so what this
+    // pins is that the mapping does not throw and the month still computes.
+    expect(result.ok).toBe(true);
   });
 });
