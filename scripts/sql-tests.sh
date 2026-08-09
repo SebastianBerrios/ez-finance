@@ -72,10 +72,15 @@ for file in "${suites[@]}"; do
 
   checks="$(grep -c 'PASS:' <<<"$output" || true)"
 
-  # ALL CHECKS PASSED is printed by the last statement of every suite. Its ABSENCE is
-  # the failure signal — a suite that died halfway prints passes and then stops, so
-  # counting passes is not enough to call it green.
-  if grep -q 'ALL CHECKS PASSED' <<<"$output"; then
+  # THE SENTINEL IS THE VERDICT. Every suite ends by printing "ALL … CHECKS PASSED",
+  # and its ABSENCE is the failure signal — a suite that dies halfway prints its passes
+  # and then stops, so counting passes cannot tell green from truncated.
+  #
+  # Matched as a PATTERN, not an exact string. deletion_deadlock.sql says "ALL
+  # CONCURRENCY CHECKS PASSED", and requiring the exact phrase reported a suite whose
+  # every check had passed as a failure. A convention that a new suite has to guess
+  # letter-for-letter is a convention that produces false alarms.
+  if grep -Eq 'ALL .*CHECKS PASSED' <<<"$output"; then
     printf 'ok    %-24s %s checks\n' "$name" "$checks"
     total_checks=$((total_checks + checks))
   else

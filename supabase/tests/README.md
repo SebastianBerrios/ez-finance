@@ -31,6 +31,12 @@ MSYS_NO_PATHCONV=1 docker exec supabase_db_ez-finance psql -U postgres -d postgr
 The reset comes FIRST: it restarts the containers, which wipes `/tmp`, so a file
 copied before it is gone by the time psql looks.
 
+Every suite must END by printing `ALL ... CHECKS PASSED` — the runner treats that
+line as the verdict, because a suite that dies halfway prints its passes and then
+stops, and counting passes cannot tell green from truncated. The wording between
+`ALL` and `CHECKS PASSED` is free (`deletion_deadlock.sql` says `ALL CONCURRENCY
+CHECKS PASSED`).
+
 A successful run ends with `ALL CHECKS PASSED`; any failure aborts with
 `ERROR: FAIL: <expectation>`. `MSYS_NO_PATHCONV=1` matters on Git Bash for
 Windows only — without it `/tmp/t.sql` is rewritten into a Windows path.
