@@ -7,7 +7,10 @@ import { SupabaseWorkspaceAdapter } from "@/modules/workspaces/infrastructure/su
 import { WorkspaceSwitcher } from "@/modules/workspaces/ui/components/workspace-switcher";
 
 import { createWorkspaceAction } from "./create-workspace.action";
+import { deleteWorkspaceAction } from "./delete-workspace.action";
+import { renameWorkspaceAction } from "./rename-workspace.action";
 import { switchWorkspaceAction } from "./switch-workspace.action";
+import { workspaceLifecycleAction } from "./workspace-lifecycle.action";
 
 export const metadata: Metadata = {
   title: "Espacios — ez finance",
@@ -61,6 +64,9 @@ export default async function WorkspacesPage() {
         <WorkspaceSwitcher
           switchAction={switchWorkspaceAction}
           createAction={createWorkspaceAction}
+          renameAction={renameWorkspaceAction}
+          lifecycleAction={workspaceLifecycleAction}
+          deleteAction={deleteWorkspaceAction}
           workspaces={workspaces.value}
           currentWorkspaceId={current.value.workspaceId}
         />

@@ -33,7 +33,7 @@ export async function switchWorkspaceAction(
     return { error: "No pudimos identificar el espacio." };
   }
 
-  const member = await new SupabaseWorkspaceAdapter().isMember(target);
+  const member = await new SupabaseWorkspaceAdapter().findMembership(target);
 
   if (!member.ok) {
     return { error: "No pudimos cambiar de espacio. Intenta de nuevo." };

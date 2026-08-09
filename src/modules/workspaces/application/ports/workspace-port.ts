@@ -13,6 +13,14 @@ export interface WorkspaceSummary {
   readonly type: "personal" | "shared";
   /** The CALLER's role in it, which is what the UI gates on. */
   readonly role: WorkspaceRole;
+  /**
+   * Read-only: it keeps its history and its reports, and accepts no new rows.
+   *
+   * Enforced in the database, not here — the two write helpers exclude archived
+   * workspaces, so every policy in the schema refuses at once (20260807210000).
+   * This field is what lets the UI say so before someone tries.
+   */
+  readonly archived: boolean;
 }
 
 export interface WorkspaceRef {
@@ -42,7 +50,7 @@ export interface WorkspacePort {
   create(draft: WorkspaceDraft): Promise<Result<WorkspaceRef, WorkspaceError>>;
 
   /**
-   * Whether the caller is a member of `workspaceId`.
+   * The caller's membership of `workspaceId`, or null when there is none.
    *
    * THE SECURITY-CRITICAL ONE. The current workspace is remembered in a cookie, and a
    * cookie is client-supplied: it must be checked against membership before anything
@@ -50,6 +58,48 @@ export interface WorkspacePort {
    * belong to rather than leaking, so the failure mode is a confusing blank screen
    * rather than a breach — but "the leak is prevented one layer down" is not a reason
    * to trust the value here.
+   *
+   * Returns the workspace's `archived` state along with the yes/no because the two
+   * are read from the same row and the caller needs both: a selection that is valid
+   * but READ-ONLY has to be resolved differently from one that is neither, and a
+   * second round trip to learn that would be a second chance to disagree with the
+   * first. A DELETED workspace answers null — it is not a place to be.
    */
-  isMember(workspaceId: string): Promise<Result<boolean, WorkspaceError>>;
+  findMembership(
+    workspaceId: string,
+  ): Promise<Result<{ readonly archived: boolean } | null, WorkspaceError>>;
+
+  /**
+   * Rename a workspace. Owner or admin (spec §4 puts configuration in the admin
+   * row); refused while archived, because a name is configuration and archived
+   * means read-only.
+   */
+  rename(
+    workspaceId: string,
+    draft: WorkspaceDraft,
+  ): Promise<Result<void, WorkspaceError>>;
+
+  /**
+   * Make a workspace read-only, preserving its history (spec §5.2). Owner only.
+   *
+   * Answers PersonalWorkspace for the bootstrap anchor and AlreadyArchived for a
+   * second press on a stale screen.
+   */
+  archive(workspaceId: string): Promise<Result<void, WorkspaceError>>;
+
+  /** The way back. Owner only; NotArchived when there is nothing to undo. */
+  unarchive(workspaceId: string): Promise<Result<void, WorkspaceError>>;
+
+  /**
+   * End a workspace. Owner only, archived first, and the EXACT name typed back
+   * (spec §5.2).
+   *
+   * `confirmName` is checked by the RPC rather than by the form. A confirmation
+   * that lives only in the UI is one a replayed request does not perform, and this
+   * is the single button in the app that ends a workspace.
+   */
+  delete(
+    workspaceId: string,
+    confirmName: string,
+  ): Promise<Result<void, WorkspaceError>>;
 }
