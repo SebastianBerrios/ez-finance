@@ -28,7 +28,10 @@ function configReturning(result: unknown) {
 
 /** A config row that governs the month, with a usable income. */
 function usableConfig(expectedIncome = 350000) {
-  return { data: [{ income_mode: "mayor", expected_income: expectedIncome }], error: null };
+  return {
+    data: [{ income_mode: "mayor", expected_income: expectedIncome }],
+    error: null,
+  };
 }
 
 describe("readOnboardingStatus", () => {

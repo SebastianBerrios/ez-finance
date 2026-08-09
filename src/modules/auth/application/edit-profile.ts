@@ -2,7 +2,11 @@ import { type AuthError } from "@/modules/auth/domain/auth-error";
 import { type UserProfile } from "@/modules/auth/domain/user-profile";
 import { type Result } from "@/shared/domain/result";
 
-import { type ProfilePort, type AvatarFile, type UserProfilePatch } from "./ports/profile-port";
+import {
+  type ProfilePort,
+  type AvatarFile,
+  type UserProfilePatch,
+} from "./ports/profile-port";
 
 interface EditProfileInput {
   userId: string;

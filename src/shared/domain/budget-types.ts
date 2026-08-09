@@ -14,12 +14,7 @@ export type TransactionKind = "income" | "expense" | "transfer";
 export type Bucket = "need" | "want" | "save";
 
 export type AccountType =
-  | "cash"
-  | "bank"
-  | "card"
-  | "wallet"
-  | "investment"
-  | "savings";
+  "cash" | "bank" | "card" | "wallet" | "investment" | "savings";
 
 /** Which leg of a transfer pair this row represents */
 export type TransferLeg = "out" | "in";

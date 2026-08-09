@@ -566,17 +566,37 @@ select pg_temp.check(
 -- bootstrap() must REFUSE while the erasure is unacknowledged. Silently
 -- re-provisioning is the bug: the user gets a working empty account and no
 -- hint that everything they had was destroyed.
+--
+-- The refusal is captured in a FLAG rather than asserted from the exception
+-- handler. The earlier shape raised its own 'FAIL: bootstrap must refuse…' in the
+-- body, and `raise exception` defaults to P0001 — the SAME sqlstate the handler
+-- catches — so its own failure message came back as "unexpected message FAIL:
+-- bootstrap must refuse…". The test worked; it just could not say which of the
+-- two things had gone wrong. It is what 20260807190000 was diagnosed through, so
+-- the next person gets to read it in one pass.
 do $$
+declare
+  v_refused boolean := false;
+  v_message text;
 begin
-  perform ez_finance.bootstrap();
-  raise exception 'FAIL: bootstrap must refuse an unacknowledged deletion';
-exception
-  when sqlstate 'P0001' then
-    if sqlerrm = 'account_deleted' then
-      raise notice 'PASS: bootstrap refuses while the deletion is unacknowledged';
-    else
-      raise exception 'FAIL: unexpected message %', sqlerrm;
-    end if;
+  begin
+    perform ez_finance.bootstrap();
+  exception
+    when sqlstate 'P0001' then
+      v_refused := true;
+      v_message := sqlerrm;
+  end;
+
+  if not v_refused then
+    raise exception
+      'FAIL: bootstrap RETURNED for an unacknowledged deletion instead of refusing';
+  end if;
+
+  if v_message <> 'account_deleted' then
+    raise exception 'FAIL: bootstrap refused with the wrong message: %', v_message;
+  end if;
+
+  raise notice 'PASS: bootstrap refuses while the deletion is unacknowledged';
 end;
 $$;
 

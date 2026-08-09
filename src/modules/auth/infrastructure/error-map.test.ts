@@ -11,7 +11,9 @@ describe("mapSupabaseError", () => {
   });
 
   it("maps invalid_credentials code → AuthenticationFailed", () => {
-    expect(mapSupabaseError({ code: "invalid_credentials", message: "" })).toEqual({
+    expect(
+      mapSupabaseError({ code: "invalid_credentials", message: "" }),
+    ).toEqual({
       kind: "AuthenticationFailed",
     });
   });
@@ -23,7 +25,9 @@ describe("mapSupabaseError", () => {
   });
 
   it("maps email_not_confirmed code → AuthenticationFailed (non-enum)", () => {
-    expect(mapSupabaseError({ code: "email_not_confirmed", message: "" })).toEqual({
+    expect(
+      mapSupabaseError({ code: "email_not_confirmed", message: "" }),
+    ).toEqual({
       kind: "AuthenticationFailed",
     });
   });
@@ -35,13 +39,17 @@ describe("mapSupabaseError", () => {
   });
 
   it("maps HTTP 429 status → RateLimited regardless of code", () => {
-    expect(mapSupabaseError({ status: 429, message: "too many requests" })).toEqual({
+    expect(
+      mapSupabaseError({ status: 429, message: "too many requests" }),
+    ).toEqual({
       kind: "RateLimited",
     });
   });
 
   it("maps session_not_found code → SessionExpired", () => {
-    expect(mapSupabaseError({ code: "session_not_found", message: "" })).toEqual({
+    expect(
+      mapSupabaseError({ code: "session_not_found", message: "" }),
+    ).toEqual({
       kind: "SessionExpired",
     });
   });
@@ -77,19 +85,23 @@ describe("mapSupabaseError", () => {
   });
 
   it("maps validation_failed code → InvalidEmail", () => {
-    expect(mapSupabaseError({ code: "validation_failed", message: "" })).toEqual({
+    expect(
+      mapSupabaseError({ code: "validation_failed", message: "" }),
+    ).toEqual({
       kind: "InvalidEmail",
     });
   });
 
   it("maps authentication_failed generic message → AuthenticationFailed", () => {
-    expect(
-      mapSupabaseError({ message: "authentication failed" }),
-    ).toEqual({ kind: "AuthenticationFailed" });
+    expect(mapSupabaseError({ message: "authentication failed" })).toEqual({
+      kind: "AuthenticationFailed",
+    });
   });
 
   it("maps unknown code → Unavailable (fail closed)", () => {
-    expect(mapSupabaseError({ code: "some_unknown_code_xyz", message: "" })).toEqual({
+    expect(
+      mapSupabaseError({ code: "some_unknown_code_xyz", message: "" }),
+    ).toEqual({
       kind: "Unavailable",
     });
   });
@@ -99,7 +111,10 @@ describe("mapSupabaseError", () => {
   });
 
   it("does not leak any Supabase code string in the returned error", () => {
-    const result = mapSupabaseError({ code: "some_unknown_code_xyz", message: "raw details" });
+    const result = mapSupabaseError({
+      code: "some_unknown_code_xyz",
+      message: "raw details",
+    });
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("some_unknown_code_xyz");
     expect(serialized).not.toContain("raw details");

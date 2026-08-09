@@ -20,7 +20,10 @@ function makeFakeExportPort(overrides: Partial<ExportPort> = {}): ExportPort {
 describe("exportUserData use case", () => {
   it("delegates to the export port and returns ExportArtifact", async () => {
     const exportPort = makeFakeExportPort();
-    const result = await exportUserData({ userId: "u1" }, { export: exportPort });
+    const result = await exportUserData(
+      { userId: "u1" },
+      { export: exportPort },
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.filename).toBe("export.zip");
@@ -33,7 +36,10 @@ describe("exportUserData use case", () => {
     const exportPort = makeFakeExportPort({
       exportUserData: vi.fn().mockResolvedValue(err({ kind: "Unavailable" })),
     });
-    const result = await exportUserData({ userId: "u1" }, { export: exportPort });
+    const result = await exportUserData(
+      { userId: "u1" },
+      { export: exportPort },
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("Unavailable");
   });
