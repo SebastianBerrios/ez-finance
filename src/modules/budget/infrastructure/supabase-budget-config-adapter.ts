@@ -116,7 +116,9 @@ export class SupabaseBudgetConfigAdapter implements BudgetConfigPort {
       };
 
       return ok(
-        nearLimit === null ? base : { ...base, nearLimitThresholdPct: nearLimit },
+        nearLimit === null
+          ? base
+          : { ...base, nearLimitThresholdPct: nearLimit },
       );
     } catch {
       return err({ kind: "Unavailable" });
