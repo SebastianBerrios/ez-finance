@@ -20,8 +20,7 @@ export function mapSupabaseError(e: unknown): AuthError {
 
   // Prefer the error code (more stable than message text)
   const code = typeof raw["code"] === "string" ? raw["code"] : "";
-  const status =
-    typeof raw["status"] === "number" ? raw["status"] : undefined;
+  const status = typeof raw["status"] === "number" ? raw["status"] : undefined;
   const message = typeof raw["message"] === "string" ? raw["message"] : "";
 
   // 429 HTTP status always maps to rate limit

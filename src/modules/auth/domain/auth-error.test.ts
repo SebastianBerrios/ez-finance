@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  type AuthError,
-  isAuthError,
-  classify,
-} from "./auth-error";
+import { type AuthError, isAuthError, classify } from "./auth-error";
 
 describe("AuthError", () => {
   describe("isAuthError type guard", () => {
@@ -116,12 +112,12 @@ describe("AuthError", () => {
     // swallows ConflictOrRejected, so the form answered a taken address with an
     // error while a fresh one redirected to /check-email: an enumeration oracle
     // in the one flow that is written to be non-enumerating.
-    it.each([
-      "user_already_exists",
-      "user_already_registered",
-    ])("maps '%s' to ConflictOrRejected (duplicate signup must not be an oracle)", (code) => {
-      expect(classify(code).kind).toBe("ConflictOrRejected");
-    });
+    it.each(["user_already_exists", "user_already_registered"])(
+      "maps '%s' to ConflictOrRejected (duplicate signup must not be an oracle)",
+      (code) => {
+        expect(classify(code).kind).toBe("ConflictOrRejected");
+      },
+    );
 
     it("maps 'email_taken' to ConflictOrRejected", () => {
       expect(classify("email_taken").kind).toBe("ConflictOrRejected");

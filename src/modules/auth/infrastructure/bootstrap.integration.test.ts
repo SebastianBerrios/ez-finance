@@ -32,14 +32,18 @@ function adminClient() {
  * Simulates what the browser client does.
  */
 function anonClient(accessToken?: string) {
-  const PUBLISHABLE_KEY = process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
+  const PUBLISHABLE_KEY =
+    process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
   const client = createClient(TEST_URL, PUBLISHABLE_KEY, {
     db: { schema: "ez_finance" },
     auth: { autoRefreshToken: false, persistSession: false },
   });
   if (accessToken) {
     // Inject a pre-fetched session so we can call RPCs as the authenticated user
-    void client.auth.setSession({ access_token: accessToken, refresh_token: "" });
+    void client.auth.setSession({
+      access_token: accessToken,
+      refresh_token: "",
+    });
   }
   return client;
 }
@@ -63,7 +67,8 @@ describe.skipIf(!process.env["SUPABASE_TEST_URL"])(
         password: testPassword,
         email_confirm: true,
       });
-      if (error) throw new Error(`Failed to create test user: ${error.message}`);
+      if (error)
+        throw new Error(`Failed to create test user: ${error.message}`);
       createdUserId = data.user?.id;
     });
 
@@ -81,7 +86,8 @@ describe.skipIf(!process.env["SUPABASE_TEST_URL"])(
       // This test validates the same wiring path by calling signInWithPassword
       // directly — the adapter is a thin delegation wrapper; the integration
       // value is the schema routing and credential resolution, tested here.
-      const PUBLISHABLE_KEY = process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
+      const PUBLISHABLE_KEY =
+        process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
       const client = createClient(TEST_URL, PUBLISHABLE_KEY, {
         db: { schema: "ez_finance" },
         auth: { autoRefreshToken: false, persistSession: false },
@@ -99,7 +105,8 @@ describe.skipIf(!process.env["SUPABASE_TEST_URL"])(
 
     it("bootstrap creates profile + Personal workspace for new user", async () => {
       // Sign in as the test user to get a fresh access token
-      const PUBLISHABLE_KEY = process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
+      const PUBLISHABLE_KEY =
+        process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
       const client = createClient(TEST_URL, PUBLISHABLE_KEY, {
         db: { schema: "ez_finance" },
         auth: { autoRefreshToken: false, persistSession: false },
@@ -166,7 +173,8 @@ describe.skipIf(!process.env["SUPABASE_TEST_URL"])(
     });
 
     it("bootstrap is idempotent — second call returns same workspace_id", async () => {
-      const PUBLISHABLE_KEY = process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
+      const PUBLISHABLE_KEY =
+        process.env["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] ?? "";
       const client = createClient(TEST_URL, PUBLISHABLE_KEY, {
         db: { schema: "ez_finance" },
         auth: { autoRefreshToken: false, persistSession: false },

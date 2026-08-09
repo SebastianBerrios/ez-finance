@@ -27,10 +27,7 @@ export default defineConfig({
             ...SERVER_ONLY_APP_TESTS.map((pattern) => `src/app/${pattern}`),
           ],
           // Exclude integration tests that require a live Supabase stack
-          exclude: [
-            "**/*.integration.test.ts",
-            "**/node_modules/**",
-          ],
+          exclude: ["**/*.integration.test.ts", "**/node_modules/**"],
         },
       },
       {
