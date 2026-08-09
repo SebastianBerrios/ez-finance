@@ -10,6 +10,13 @@ import { getMonthlyBudget } from "@/modules/budget/application/get-monthly-budge
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { SupabaseMonthlySnapshotAdapter } from "@/modules/budget/infrastructure/supabase-monthly-snapshot-adapter";
 import { BucketCard } from "@/modules/budget/ui/components/bucket-card";
+import {
+  goalsNeedingAttention,
+  listGoalsWithPace,
+} from "@/modules/goals/application/list-goals-with-pace";
+import { SupabaseGoalAdapter } from "@/modules/goals/infrastructure/supabase-goal-adapter";
+import { listDueSoon } from "@/modules/scheduled/application/list-due-soon";
+import { SupabaseScheduledAdapter } from "@/modules/scheduled/infrastructure/supabase-scheduled-adapter";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 import { MovementList } from "@/modules/transactions/ui/components/movement-list";
 import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
@@ -70,14 +77,32 @@ export default async function AppPage() {
   // second round trip to the Auth server.
   const { user } = await getAuthenticatedUser();
 
-  const [accounts, movements] = await Promise.all([
+  const [accounts, movements, goals, dueSoon] = await Promise.all([
     new SupabaseAccountAdapter().listWithBalances(entry.value.workspaceId),
     new SupabaseTransactionAdapter().listForMonth(
       entry.value.workspaceId,
       now,
       user?.id ?? "",
     ),
+    // The two alert sources spec §5.11 asks for and the app did not have: a goal
+    // falling behind, and a schedule about to run. Both are DERIVED — the pace from
+    // the goal's own window, the next occurrence from its day of month — so neither
+    // adds a query beyond the list it already needed.
+    listGoalsWithPace(
+      { workspaceId: entry.value.workspaceId, today: now },
+      { goals: new SupabaseGoalAdapter() },
+    ),
+    listDueSoon(
+      { workspaceId: entry.value.workspaceId, today: now },
+      { scheduled: new SupabaseScheduledAdapter() },
+    ),
   ]);
+
+  // A FAILED read produces no alerts rather than a broken panel. Not being able to
+  // check whether a goal is behind is not the same as it being fine, but the dashboard
+  // is not the screen to argue that on — /app/metas says so where it matters.
+  const attention = goals.ok ? goalsNeedingAttention(goals.value) : [];
+  const upcoming = dueSoon.ok ? dueSoon.value : [];
 
   const budget = await getMonthlyBudget(
     { workspaceId: entry.value.workspaceId, month: now },
@@ -253,6 +278,63 @@ export default async function AppPage() {
               </section>
             )}
           </>
+        )}
+
+        {/*
+          A SECOND panel, and outside the budget branch on purpose. The bucket alerts
+          above are budget OUTPUT — they only exist when the month computed. A goal
+          falling behind or a charge landing on Friday matters just as much when the
+          budget config is broken, and burying them inside that branch would hide them
+          exactly when the dashboard is least useful.
+
+          Two panels rather than one merged list because they answer different
+          questions: "how are my cubes doing" versus "what is coming".
+        */}
+        {(attention.length > 0 || upcoming.length > 0) && (
+          <section
+            aria-label="Avisos"
+            className="border-border rounded-xl border p-4"
+          >
+            <p className="text-foreground text-sm font-medium">Te avisamos</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {upcoming.map((due) => (
+                <li key={due.id} className="text-muted-foreground text-xs">
+                  {/*
+                    The DAY, not just "en 3 días": someone deciding whether to move
+                    money needs the date they are planning around. Both are given
+                    because the countdown is what makes it feel close.
+                  */}
+                  <span className="text-foreground">{due.name}</span>{" "}
+                  {due.kind === "income" ? "entra" : "sale"}{" "}
+                  {due.daysUntil === 0
+                    ? "hoy"
+                    : due.daysUntil === 1
+                      ? "mañana"
+                      : `en ${due.daysUntil} días`}{" "}
+                  ({due.occursOn})
+                </li>
+              ))}
+
+              {attention.map((item) => (
+                <li
+                  key={item.goal.id}
+                  className="text-muted-foreground text-xs"
+                >
+                  <span className="text-foreground">{item.goal.name}</span>{" "}
+                  {item.pace?.kind === "OVERDUE"
+                    ? "pasó su fecha y todavía le falta"
+                    : "va atrasada para su fecha"}
+                </li>
+              ))}
+            </ul>
+
+            <Link
+              href="/app/programadas"
+              className="text-muted-foreground hover:text-foreground mt-3 inline-flex text-xs underline"
+            >
+              Ver programados
+            </Link>
+          </section>
         )}
 
         {accounts.ok && accounts.value.length > 0 && (
