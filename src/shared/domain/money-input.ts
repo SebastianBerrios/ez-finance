@@ -50,3 +50,35 @@ export function parseAmountToMinorUnits(
   // negative zero, so "-0.00" and "0.00" land on the same value by construction.
   return ok(sign === "-" ? -magnitude : magnitude);
 }
+
+/**
+ * The inverse: minor units back into what belongs in the input a person types in.
+ *
+ * EXISTS FOR THE EDIT FORM, and its contract is the round trip — a movement opened
+ * and saved without touching anything must keep the amount it had. That is why the
+ * fraction is SLICED off the digit string rather than divided out: 5n at exponent 2
+ * is "0.05", and a formatter that answered "5" would multiply the amount by a
+ * hundred the moment the form was submitted back.
+ *
+ * Plain, not locale-formatted. `parseAmountToMinorUnits` refuses thousands
+ * separators on purpose (they are ambiguous across conventions), so producing them
+ * here would build a value its own parser rejects.
+ */
+export function formatMinorUnitsForInput(
+  minorUnits: bigint,
+  exponent: number,
+): string {
+  const negative = minorUnits < 0n;
+  const digits = (negative ? -minorUnits : minorUnits).toString();
+  const sign = negative ? "-" : "";
+
+  if (exponent <= 0) return `${sign}${digits}`;
+
+  // Padded so slicing is always safe: 5n at exponent 2 becomes "005", which splits
+  // into a whole part of "0" and a fraction of "05".
+  const padded = digits.padStart(exponent + 1, "0");
+  const whole = padded.slice(0, padded.length - exponent);
+  const fraction = padded.slice(padded.length - exponent);
+
+  return `${sign}${whole}.${fraction}`;
+}

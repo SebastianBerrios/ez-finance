@@ -14,6 +14,15 @@ export type TransactionError =
   | { readonly kind: "UnknownReference" }
   /** An observer, or someone editing a movement that is not theirs (spec §4). */
   | { readonly kind: "NotPermitted" }
+  /**
+   * A transfer leg was pointed at the edit path.
+   *
+   * Distinct from NotPermitted because it is not about who you are: NOBODY edits a
+   * leg on its own. A transfer is a tied pair (spec §5.5), and changing one side
+   * would leave money departing at one amount and arriving at another. The honest
+   * fix is to delete the pair and record it again.
+   */
+  | { readonly kind: "TransferNotEditable" }
   /** The workspace has no base currency yet, so an amount has nothing to mean. */
   | { readonly kind: "WorkspaceNotReady" }
   | { readonly kind: "Unavailable" };

@@ -171,6 +171,18 @@ site_url = "http://127.0.0.1:3000"
 additional_redirect_urls = [
   "http://localhost:3000/**",
   "http://127.0.0.1:3000/**",
+  # 3100 is the designated ALTERNATE e2e port (playwright.config.ts, E2E_PORT).
+  # A sibling app of the mvp-lab fleet holding 3000 is routine, and the suite
+  # cannot adopt that server, so it needs somewhere else to listen. The origin
+  # has to be allow-listed here or auth silently substitutes the Site URL into
+  # every email link and tests/e2e/auth-email-redirects.spec fails — which is
+  # exactly what happened when the override was added without this entry.
+  #
+  # This list is EXACT, not a pattern over ports: any other E2E_PORT value needs
+  # its own line, and the stack must be fully restarted (`supabase stop &&
+  # supabase start`) because a running one keeps the old allow-list.
+  "http://localhost:3100/**",
+  "http://127.0.0.1:3100/**",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
