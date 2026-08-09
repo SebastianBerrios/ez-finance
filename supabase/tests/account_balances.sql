@@ -177,10 +177,26 @@ begin
   perform set_config('role', 'anon', false);
 end;
 $$;
+-- anon cannot even EXECUTE it now, which is stronger than reading nothing through it.
+--
+-- This used to assert `count(*) = 0`: the function is SECURITY INVOKER, so anon's own
+-- RLS returned no rows. Correct, but it relied on the policy being the ONLY guard.
+-- Postgres grants EXECUTE to PUBLIC on every new function and 20260728231500 only
+-- added a grant, so the anon key could reach it. 20260809210000 revokes it, and the
+-- refusal now happens one layer before RLS is consulted.
+create or replace function pg_temp.rejects(p_sql text, p_label text) returns void language plpgsql as $$
+begin
+  begin execute p_sql;
+  exception when others then raise notice 'PASS: % (%)', p_label, sqlerrm; return;
+  end;
+  raise exception 'FAIL: % — the statement was ACCEPTED', p_label;
+end;
+$$;
+
 select pg_temp.as_anon();
-select pg_temp.check(
-  (select count(*) from ez_finance.account_balances('ba110000-0000-4000-8000-00000000bb01')) = 0,
-  'nor does anon'
+select pg_temp.rejects(
+  $$select count(*) from ez_finance.account_balances('ba110000-0000-4000-8000-00000000bb01')$$,
+  'anon cannot execute account_balances at all — revoked, not merely filtered by RLS'
 );
 select pg_temp.as_postgres();
 
