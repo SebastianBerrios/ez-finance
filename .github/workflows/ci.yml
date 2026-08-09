@@ -98,6 +98,14 @@ jobs:
           SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
         run: supabase start
 
+      # WHY THE STEPS AFTER THIS ONE RUN ANYWAY (`if: !cancelled()`).
+      #
+      # The database suites and the browser tests are independent, and on a pull request
+      # you want to know EVERYTHING that is broken, not just the first thing. Fail-fast
+      # here means one red suite hides whether the browser tests would also have failed,
+      # and the next push finds out — one round trip per problem.
+      #
+      # The job still fails. This changes what gets reported, not what passes.
       - name: Database suites
         env:
           SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
@@ -115,6 +123,7 @@ jobs:
       # cannot skip. (Grepping the test list for a count was the first version of this
       # and it asserted the shape of a reporter's output, not the thing that matters.)
       - name: Confirm the local stack is the one under test
+        if: ${{ !cancelled() }}
         env:
           SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
           SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
@@ -127,9 +136,11 @@ jobs:
           esac
 
       - name: Install Playwright browsers
+        if: ${{ !cancelled() }}
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Browser tests
+        if: ${{ !cancelled() }}
         env:
           SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID: dummy
           SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET: dummy
