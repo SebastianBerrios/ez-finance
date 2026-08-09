@@ -271,14 +271,31 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     const zipPath = await download.path();
     const { readFile } = await import("node:fs/promises");
     const entries = unzipSync(new Uint8Array(await readFile(zipPath)));
+    // Eight datasets plus the profile, in both formats, plus the readme. Asserted in
+    // FULL rather than by count, because WHICH datasets are in here is the point: for a
+    // long time the archive held a profile, the spaces and the memberships and not one
+    // movement, while spec §3.1 promised "toda su información" and this is the file
+    // someone keeps immediately before the original is erased.
     expect(Object.keys(entries).sort()).toEqual([
       "LEEME.txt",
+      "categorias.csv",
+      "categorias.json",
+      "cuentas.csv",
+      "cuentas.json",
       "espacios.csv",
       "espacios.json",
       "membresias.csv",
       "membresias.json",
+      "metas.csv",
+      "metas.json",
+      "movimientos.csv",
+      "movimientos.json",
       "perfil.csv",
       "perfil.json",
+      "presupuestos.csv",
+      "presupuestos.json",
+      "programados.csv",
+      "programados.json",
     ]);
 
     const workspaces = JSON.parse(
@@ -287,6 +304,14 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
     expect(workspaces).toContainEqual(
       expect.objectContaining({ type: "personal" }),
     );
+
+    // The movements file is a real file with the real header, not an empty placeholder.
+    // This account has recorded nothing, so what is proven here is that an empty
+    // dataset still exports a labelled table — a file with no header is one a
+    // spreadsheet cannot read, and an empty file looks like a failed export.
+    expect(
+      strFromU8(entries["movimientos.csv"] as Uint8Array).split("\n")[0],
+    ).toContain("registrado_por");
 
     // --- requesting deletion signs THIS browser out -------------------------
     // Scope is "local", not "global": mvp-lab shares auth.users with the other

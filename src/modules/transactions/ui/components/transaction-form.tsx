@@ -41,6 +41,24 @@ export interface TransactionFormState {
   error?: string;
 }
 
+/**
+ * What an EXISTING movement puts in the fields.
+ *
+ * `amount` is a string, already formatted by formatMinorUnitsForInput, because this
+ * is the value of a text input and the round trip has to be exact: opening a
+ * movement and saving it untouched must not change the figure.
+ */
+export interface TransactionFormInitialValues {
+  /** Submitted back in a hidden field; the action re-checks it against the session. */
+  readonly id: string;
+  readonly kind: "income" | "expense";
+  readonly amount: string;
+  readonly accountId: string;
+  readonly categoryId: string | null;
+  readonly occurredOn: string;
+  readonly note: string | null;
+}
+
 type TransactionActionFn = (
   prev: TransactionFormState,
   formData: FormData,
@@ -53,9 +71,31 @@ interface TransactionFormProps {
   currencyLabel: string;
   /** Today as YYYY-MM-DD, resolved on the server so the two never disagree. */
   today: string;
+  /** Absent when recording; present when correcting an existing movement. */
+  initial?: TransactionFormInitialValues;
+  submitLabel?: string;
 }
 
 const initialState: TransactionFormState = {};
+
+/**
+ * Open options, PLUS whichever one the movement already points at.
+ *
+ * Archived rows stay out of the pickers — the engine keeps reading them for past
+ * months, this form simply does not offer them for new movements. But an edit is not
+ * a new movement: a movement recorded in June against an account archived in July
+ * still belongs to that account, and dropping it from the list would silently move
+ * the movement to whatever option happened to be first the moment someone pressed
+ * save. So the current selection is always offered, archived or not.
+ */
+function selectable<T extends { id: string; archived: boolean }>(
+  options: readonly T[],
+  selectedId: string | null | undefined,
+): readonly T[] {
+  return options.filter(
+    (option) => !option.archived || option.id === selectedId,
+  );
+}
 
 export function TransactionForm({
   action,
@@ -63,17 +103,28 @@ export function TransactionForm({
   categories,
   currencyLabel,
   today,
+  initial,
+  submitLabel = "Registrar",
 }: TransactionFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
-  const [kind, setKind] = useState<"expense" | "income">("expense");
+  const [kind, setKind] = useState<"expense" | "income">(
+    initial?.kind ?? "expense",
+  );
 
-  // Archived rows stay OUT of the pickers but keep counting in past months — the
-  // engine reads them, this form just does not offer them for new movements.
-  const openAccounts = accounts.filter((account) => !account.archived);
-  const openCategories = categories.filter((category) => !category.archived);
+  const openAccounts = selectable(accounts, initial?.accountId);
+  const openCategories = selectable(categories, initial?.categoryId);
 
   return (
     <form action={formAction} noValidate className="flex flex-col gap-5">
+      {/*
+        Only when correcting. The server does not trust it — it scopes the UPDATE to
+        the current workspace and the policy scopes it to rows the caller authored —
+        but the form has to name WHICH movement it is saving.
+      */}
+      {initial !== undefined && (
+        <input type="hidden" name="transactionId" value={initial.id} />
+      )}
+
       {state.error && (
         <div
           role="alert"
@@ -128,6 +179,7 @@ export function TransactionForm({
           inputMode="decimal"
           required
           placeholder="25.50"
+          defaultValue={initial?.amount}
         />
       </div>
 
@@ -137,11 +189,13 @@ export function TransactionForm({
           id="tx-account"
           name="accountId"
           required
+          defaultValue={initial?.accountId}
           className="border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         >
           {openAccounts.map((account) => (
             <option key={account.id} value={account.id}>
               {account.name}
+              {account.archived ? " · archivada" : ""}
             </option>
           ))}
         </select>
@@ -159,6 +213,7 @@ export function TransactionForm({
           <select
             id="tx-category"
             name="categoryId"
+            defaultValue={initial?.categoryId ?? ""}
             className="border-input bg-background focus-visible:ring-ring h-10 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             <option value="">Sin categoría</option>
@@ -168,6 +223,7 @@ export function TransactionForm({
                 {category.bucket === null
                   ? ""
                   : ` · ${BUCKET_LABEL[category.bucket] ?? ""}`}
+                {category.archived ? " · archivada" : ""}
               </option>
             ))}
           </select>
@@ -184,7 +240,7 @@ export function TransactionForm({
           name="occurredOn"
           type="date"
           required
-          defaultValue={today}
+          defaultValue={initial?.occurredOn ?? today}
         />
       </div>
 
@@ -196,11 +252,12 @@ export function TransactionForm({
           type="text"
           maxLength={500}
           autoComplete="off"
+          defaultValue={initial?.note ?? ""}
         />
       </div>
 
       <Button type="submit" disabled={isPending} className="w-full">
-        {isPending ? "Guardando…" : "Registrar"}
+        {isPending ? "Guardando…" : submitLabel}
       </Button>
     </form>
   );

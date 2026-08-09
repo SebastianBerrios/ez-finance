@@ -3,9 +3,15 @@
 import { useActionState } from "react";
 
 import type { WorkspaceSummary } from "@/modules/workspaces/application/ports/workspace-port";
+import {
+  type DeleteWorkspaceState,
+  type WorkspaceLifecycleState,
+  WorkspaceAdmin,
+} from "@/modules/workspaces/ui/components/workspace-admin";
 import { Button } from "@shared/ui/button";
 import { Input } from "@shared/ui/input";
 import { Label } from "@shared/ui/label";
+import type { RenameState } from "@shared/ui/rename-inline";
 
 export interface SwitchWorkspaceState {
   error?: string;
@@ -29,6 +35,15 @@ type CreateActionFn = (
 interface WorkspaceSwitcherProps {
   switchAction: SwitchActionFn;
   createAction: CreateActionFn;
+  renameAction: (prev: RenameState, formData: FormData) => Promise<RenameState>;
+  lifecycleAction: (
+    prev: WorkspaceLifecycleState,
+    formData: FormData,
+  ) => Promise<WorkspaceLifecycleState>;
+  deleteAction: (
+    prev: DeleteWorkspaceState,
+    formData: FormData,
+  ) => Promise<DeleteWorkspaceState>;
   workspaces: readonly WorkspaceSummary[];
   currentWorkspaceId: string;
 }
@@ -57,6 +72,9 @@ const ROLE_LABEL: Readonly<Record<string, string>> = {
 export function WorkspaceSwitcher({
   switchAction,
   createAction,
+  renameAction,
+  lifecycleAction,
+  deleteAction,
   workspaces,
   currentWorkspaceId,
 }: WorkspaceSwitcherProps) {
@@ -90,45 +108,67 @@ export function WorkspaceSwitcher({
               key={workspace.id}
               className={
                 isCurrent
-                  ? "border-primary bg-primary/5 flex items-center justify-between gap-3 rounded-md border px-3 py-3"
-                  : "border-border flex items-center justify-between gap-3 rounded-md border px-3 py-3"
+                  ? "border-primary bg-primary/5 rounded-md border px-3 py-3"
+                  : workspace.archived
+                    ? "border-border/60 rounded-md border border-dashed px-3 py-3"
+                    : "border-border rounded-md border px-3 py-3"
               }
             >
-              <span className="flex flex-col gap-0.5">
-                <span className="text-foreground text-sm">
-                  {workspace.name}
-                  {workspace.type === "personal" && (
-                    <span className="text-muted-foreground ml-2 text-xs">
-                      personal
-                    </span>
-                  )}
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-foreground text-sm">
+                    {workspace.name}
+                    {workspace.type === "personal" && (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        personal
+                      </span>
+                    )}
+                    {/*
+                    Labelled, not hidden. An archived space keeps its reports and
+                    is still worth opening; what it does not accept is new rows.
+                  */}
+                    {workspace.archived && (
+                      <span className="text-muted-foreground ml-2 text-xs">
+                        solo lectura
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {ROLE_LABEL[workspace.role] ?? workspace.role}
+                  </span>
                 </span>
-                <span className="text-muted-foreground text-xs">
-                  {ROLE_LABEL[workspace.role] ?? workspace.role}
-                </span>
-              </span>
 
-              {isCurrent ? (
-                <span className="text-muted-foreground text-xs">
-                  Estás aquí
-                </span>
-              ) : (
-                <form action={switchFormAction}>
-                  <input
-                    type="hidden"
-                    name="workspaceId"
-                    value={workspace.id}
-                  />
-                  <Button
-                    type="submit"
-                    variant="ghost"
-                    size="sm"
-                    disabled={isSwitching}
-                    aria-label={`Cambiar a ${workspace.name}`}
-                  >
-                    Cambiar
-                  </Button>
-                </form>
+                {isCurrent ? (
+                  <span className="text-muted-foreground text-xs">
+                    Estás aquí
+                  </span>
+                ) : (
+                  <form action={switchFormAction}>
+                    <input
+                      type="hidden"
+                      name="workspaceId"
+                      value={workspace.id}
+                    />
+                    <Button
+                      type="submit"
+                      variant="ghost"
+                      size="sm"
+                      disabled={isSwitching}
+                      aria-label={`Cambiar a ${workspace.name}`}
+                    >
+                      Cambiar
+                    </Button>
+                  </form>
+                )}
+              </div>
+
+              {(workspace.role === "owner" || workspace.role === "admin") && (
+                <WorkspaceAdmin
+                  workspace={workspace}
+                  renameAction={renameAction}
+                  lifecycleAction={lifecycleAction}
+                  deleteAction={deleteAction}
+                />
               )}
             </li>
           );

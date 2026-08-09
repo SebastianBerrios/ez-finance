@@ -46,6 +46,54 @@ const MEMBER_ROWS = [
   },
 ];
 
+const OTHER_USER_ID = "22222222-2222-4222-8222-222222222222";
+
+/**
+ * Two movements in the same space: one the caller recorded, one someone else did.
+ *
+ * The second is what makes the authorship assertions meaningful — the whole reason
+ * created_by is not shipped raw is that in a shared space it is another person's
+ * fleet-wide auth UUID.
+ */
+const TRANSACTION_ROWS = [
+  {
+    id: "tx-1",
+    workspace_id: "ws-1",
+    account_id: "acc-1",
+    kind: "expense",
+    base_amount: 25000,
+    entered_amount: 25000,
+    entered_currency: "ARS",
+    exchange_rate: 1,
+    occurred_on: "2026-07-15",
+    category_id: "cat-1",
+    note: "Feria",
+    transfer_id: null,
+    transfer_leg: null,
+    counter_account_id: null,
+    created_by: USER_ID,
+    created_at: "2026-07-15T10:00:00+00:00",
+  },
+  {
+    id: "tx-2",
+    workspace_id: "ws-1",
+    account_id: "acc-1",
+    kind: "income",
+    base_amount: 500000,
+    entered_amount: 500000,
+    entered_currency: "ARS",
+    exchange_rate: 1,
+    occurred_on: "2026-07-01",
+    category_id: null,
+    note: null,
+    transfer_id: null,
+    transfer_leg: null,
+    counter_account_id: null,
+    created_by: OTHER_USER_ID,
+    created_at: "2026-07-01T10:00:00+00:00",
+  },
+];
+
 interface TableResult {
   rows?: unknown;
   single?: unknown;
@@ -82,12 +130,18 @@ function tableStub(
 /** Filters observed per table during the last exportUserData() call. */
 let filters: Record<string, RecordedFilter[]>;
 
-/** Wire the three tables the export reads, in any order. */
+/** Wire every table the export reads, in any order. */
 function wireTables(overrides: Record<string, TableResult> = {}) {
   const tables: Record<string, TableResult> = {
     profiles: { single: PROFILE_ROW },
     workspaces: { rows: WORKSPACE_ROWS },
     workspace_members: { rows: MEMBER_ROWS },
+    accounts: { rows: [] },
+    categories: { rows: [] },
+    budget_configs: { rows: [] },
+    transactions: { rows: TRANSACTION_ROWS },
+    goals: { rows: [] },
+    scheduled_transactions: { rows: [] },
     ...overrides,
   };
   filters = {};
@@ -136,14 +190,29 @@ describe("ExportAdapter.exportUserData", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    // Eight datasets plus the profile, in both formats, plus the readme. The list is
+    // asserted in FULL rather than by count: the point of this change is which datasets
+    // are present, and "19 files" would pass with the movements missing.
     expect(readZip(result.value.bytes).names).toEqual([
       "LEEME.txt",
+      "categorias.csv",
+      "categorias.json",
+      "cuentas.csv",
+      "cuentas.json",
       "espacios.csv",
       "espacios.json",
       "membresias.csv",
       "membresias.json",
+      "metas.csv",
+      "metas.json",
+      "movimientos.csv",
+      "movimientos.json",
       "perfil.csv",
       "perfil.json",
+      "presupuestos.csv",
+      "presupuestos.json",
+      "programados.csv",
+      "programados.json",
     ]);
   });
 
@@ -360,5 +429,105 @@ describe("ExportAdapter.exportUserData", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("Unavailable");
+  });
+
+  it("includes the MOVEMENTS, which is the point of the archive", async () => {
+    // The regression this whole change is about. Everything else in the archive can be
+    // rebuilt from memory; a year of movements cannot, and this is the file someone
+    // downloads immediately before erasing the original.
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const rows: unknown = JSON.parse(
+      readZip(result.value.bytes).text("movimientos.json"),
+    );
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows).toHaveLength(2);
+
+    const csv = readZip(result.value.bytes).text("movimientos.csv");
+    expect(csv).toContain("Feria");
+    expect(csv).toContain("25000");
+  });
+
+  it("does NOT ship another person's auth UUID, and says who recorded what", async () => {
+    // created_by in a shared space is a fleet-wide auth UUID belonging to someone else
+    // — the same reason membresias is scoped to the caller. What a person actually
+    // needs is "was this mine", so the raw column is replaced by a word.
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const zip = readZip(result.value.bytes);
+    const csv = zip.text("movimientos.csv");
+    const json = zip.text("movimientos.json");
+
+    expect(csv).not.toContain(OTHER_USER_ID);
+    expect(json).not.toContain(OTHER_USER_ID);
+    expect(csv).not.toContain("created_by");
+
+    expect(csv.split("\n")[0]).toContain("registrado_por");
+    expect(csv).toContain("vos");
+    expect(csv).toContain("otra persona del espacio");
+  });
+
+  it("calls a movement whose author deleted their account 'usuario eliminado'", async () => {
+    // created_by is nulled when the author erases their account (ON DELETE SET NULL),
+    // and a blank cell there would read as "nobody recorded this".
+    wireTables({
+      transactions: {
+        rows: [{ ...TRANSACTION_ROWS[0], created_by: null }],
+      },
+    });
+
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(readZip(result.value.bytes).text("movimientos.csv")).toContain(
+      "usuario eliminado",
+    );
+  });
+
+  it("ABORTS when a dataset cannot be read, rather than shipping a partial archive", async () => {
+    // The failure mode that must never happen: a zip missing the movements, kept by
+    // someone who then deletes their account. An error is recoverable; a silently
+    // incomplete archive is not.
+    wireTables({ transactions: { error: { message: "boom" } } });
+
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(false);
+  });
+
+  it("builds the readme FROM the dataset list, so it cannot go stale", async () => {
+    // A hand-written index of a machine-generated archive is an index that lies the
+    // first time someone adds a dataset and forgets — and the reader cannot tell.
+    const result = await new ExportAdapter().exportUserData(USER_ID);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const readme = readZip(result.value.bytes).text("LEEME.txt");
+    for (const name of [
+      "perfil",
+      "espacios",
+      "membresias",
+      "cuentas",
+      "categorias",
+      "presupuestos",
+      "movimientos",
+      "metas",
+      "programados",
+    ]) {
+      expect(readme).toContain(`${name}.json / ${name}.csv`);
+    }
+
+    // And it explains the two things a reader would otherwise get wrong: whose
+    // movements are in here, and that the amounts are in minor units.
+    expect(readme).toContain("registrado_por");
+    expect(readme).toContain("unidad mínima");
   });
 });

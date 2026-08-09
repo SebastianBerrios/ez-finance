@@ -53,6 +53,7 @@ interface ProgressRow {
   readonly saved_amount: number | string;
   readonly target_date: string | null;
   readonly achieved_at: string | null;
+  readonly started_at: string;
 }
 
 /** bigint columns arrive as a number or a string depending on magnitude and driver. */
@@ -83,6 +84,7 @@ export class SupabaseGoalAdapter implements GoalPort {
           savedMinorUnits: toBigInt(row.saved_amount),
           targetDate: row.target_date,
           achieved: row.achieved_at !== null,
+          startedAt: row.started_at,
         })),
       );
     } catch {

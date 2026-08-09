@@ -24,6 +24,15 @@ export interface GoalProgress {
   readonly savedMinorUnits: bigint;
   readonly targetDate: string | null;
   readonly achieved: boolean;
+  /**
+   * When the goal was created — the START of its window.
+   *
+   * Carried because "en riesgo" (spec §5.8) is a comparison against a baseline, and
+   * with no contribution history the only honest baseline is the goal's own timeline:
+   * by the time 60 % of the window has passed, roughly 60 % should be saved. See
+   * goal-pace.ts, and 20260807230000 for why goal_progress() returns it.
+   */
+  readonly startedAt: string;
 }
 
 export interface GoalPort {

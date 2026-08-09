@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 
 import type { Movement } from "@/modules/transactions/application/ports/transaction-port";
@@ -117,6 +118,23 @@ export function MovementList({
                   shown to everyone would appear to work and change nothing. Hiding
                   it is the honest version; the server still enforces it.
                 */}
+                {/*
+                  Editing is offered for own movements EXCEPT transfer legs. A pair
+                  has to keep agreeing (spec §5.5) and there is no statement that
+                  edits both sides at once, so the row that cannot be corrected does
+                  not get a link promising otherwise — the page and the UPDATE policy
+                  refuse it too, but a dead link is a worse answer than no link.
+                */}
+                {movement.isMine && movement.transferId === null && (
+                  <Link
+                    href={`/app/movimientos/${movement.id}/editar`}
+                    aria-label={`Editar ${label} del ${movement.occurredOn}`}
+                    className="text-muted-foreground hover:text-foreground rounded p-1 text-xs transition-colors"
+                  >
+                    Editar
+                  </Link>
+                )}
+
                 {movement.isMine && (
                   <form action={formAction}>
                     <input

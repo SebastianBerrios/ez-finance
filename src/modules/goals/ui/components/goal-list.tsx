@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import type { GoalProgress } from "@/modules/goals/application/ports/goal-port";
+import type { GoalWithPace } from "@/modules/goals/application/list-goals-with-pace";
 import { type Money, fromMinorUnits } from "@shared/domain/money";
 import { expectOk } from "@shared/domain/result";
 import { Button } from "@shared/ui/button";
@@ -20,8 +20,38 @@ type ArchiveActionFn = (
 
 interface GoalListProps {
   action: ArchiveActionFn;
-  goals: readonly GoalProgress[];
+  goals: readonly GoalWithPace[];
   currency: string;
+}
+
+/**
+ * How the pace reads, and it is deliberately not alarming.
+ *
+ * The arithmetic has no tolerance band — a cent behind the line is behind (see
+ * goal-pace.ts) — so the softening belongs here, in the words. "Vas atrasado" with the
+ * figure that fixes it is actionable; a red warning over one cent trains people to
+ * ignore the label.
+ */
+function paceLabel(entry: GoalWithPace): {
+  text: string;
+  tone: "ok" | "warn" | "muted";
+} | null {
+  const pace = entry.pace;
+  if (pace === null) return null;
+
+  switch (pace.kind) {
+    case "ACHIEVED":
+      return null; // "¡llegaste!" already says it, next to the name.
+    case "NO_DEADLINE":
+      // Not a judgement: a goal without a date cannot be behind one.
+      return { text: "Sin fecha límite", tone: "muted" };
+    case "OVERDUE":
+      return { text: "Pasó la fecha y falta plata", tone: "warn" };
+    case "ON_TRACK":
+      return { text: "Vas en camino", tone: "ok" };
+    case "AT_RISK":
+      return { text: "Vas atrasado", tone: "warn" };
+  }
 }
 
 const initialState: ArchiveGoalState = {};
@@ -81,7 +111,9 @@ export function GoalList({ action, goals, currency }: GoalListProps) {
         </p>
       )}
 
-      {goals.map((goal) => {
+      {goals.map((entry) => {
+        const goal = entry.goal;
+        const label = paceLabel(entry);
         const pct = percent(goal.savedMinorUnits, goal.targetMinorUnits);
         const reached = goal.savedMinorUnits >= goal.targetMinorUnits;
 
@@ -118,6 +150,36 @@ export function GoalList({ action, goals, currency }: GoalListProps) {
               En {goal.accountName}
               {goal.targetDate !== null && ` · para el ${goal.targetDate}`}
             </p>
+
+            {label !== null && (
+              <p
+                className={
+                  label.tone === "warn"
+                    ? "text-destructive text-xs"
+                    : "text-muted-foreground text-xs"
+                }
+              >
+                {label.text}
+                {/*
+                  The figure is the actionable half: "vas atrasado" alone is a
+                  complaint, "vas atrasado, hacen falta 250.00 por mes" is a plan.
+                */}
+                {(entry.pace?.kind === "AT_RISK" ||
+                  entry.pace?.kind === "ON_TRACK") && (
+                  <>
+                    {" · faltan "}
+                    <MoneyDisplay
+                      amount={money(
+                        currency,
+                        entry.pace.monthlyNeededMinorUnits,
+                      )}
+                      size="sm"
+                    />
+                    {" por mes"}
+                  </>
+                )}
+              </p>
+            )}
 
             <div
               role="progressbar"

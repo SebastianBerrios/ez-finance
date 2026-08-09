@@ -603,6 +603,120 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     await page.goto("/app");
     await expect(page.getByText("Yape")).toBeVisible();
 
+    // --- the workspace lifecycle -------------------------------------------
+    // Archive → read-only → restore → archive → delete. What has to hold is that
+    // ARCHIVING MEANS SOMETHING: the flag is not the feature, the refusal is.
+    await page.goto("/app/espacios");
+
+    // The personal space offers no archive and no delete — it is bootstrap()'s
+    // anchor. Asserted through its own admin block so this cannot pass just because
+    // the page failed to render any controls at all.
+    await page
+      .getByRole("listitem")
+      .filter({ hasText: "personal" })
+      .getByText(/administrar/i)
+      .click();
+    await expect(
+      page.getByRole("button", { name: /archivar espacio/i }),
+      "the personal space is not archivable",
+    ).toHaveCount(0);
+    await expect(page.getByText(/no se archiva ni se elimina/i)).toBeVisible();
+
+    const businessRow = page
+      .getByRole("listitem")
+      .filter({ hasText: "Negocio" });
+
+    await businessRow.getByText(/administrar/i).click();
+    await businessRow
+      .getByRole("button", { name: /archivar espacio negocio/i })
+      .click();
+
+    await expect(page.getByText(/quedó en solo lectura/i)).toBeVisible();
+
+    const archivedAt = sql(
+      `select w.archived_at is not null from ez_finance.workspaces w
+       join   ez_finance.workspace_members m on m.workspace_id = w.id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and w.name = 'Negocio'`,
+    );
+    expect(archivedAt, "archived_at is stamped").toBe("t");
+
+    // THE ASSERTION THAT MATTERS. Switch into it and the dashboard says so, and the
+    // primary action is gone — because every write path in the database now refuses
+    // for this workspace, and a button that fails is worse than no button.
+    await page.getByRole("button", { name: /cambiar a negocio/i }).click();
+    await expect(
+      page.getByRole("button", { name: /cambiar a negocio/i }),
+    ).toHaveCount(0);
+
+    await page.goto("/app");
+    await expect(page.getByText(/está en solo lectura/i)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: /registrar movimiento/i }),
+      "an archived space offers no way to record",
+    ).toHaveCount(0);
+
+    // And the route refuses directly, not only through a hidden link.
+    await page.goto("/app/movimientos/nuevo");
+    await page.waitForURL(/\/app$/);
+
+    // --- restore, and it accepts movements again ----------------------------
+    await page.goto("/app/espacios");
+    await businessRow.getByText(/administrar/i).click();
+    await businessRow
+      .getByRole("button", { name: /restaurar espacio negocio/i })
+      .click();
+    await expect(page.getByText(/vuelve a aceptar movimientos/i)).toBeVisible();
+
+    await page.goto("/app");
+    await expect(
+      page.getByRole("link", { name: /registrar movimiento/i }),
+    ).toBeVisible();
+
+    // --- delete, which needs archiving first AND the exact name -------------
+    await page.goto("/app/espacios");
+    await businessRow.getByText(/administrar/i).click();
+    await businessRow
+      .getByRole("button", { name: /archivar espacio negocio/i })
+      .click();
+    await expect(page.getByText(/quedó en solo lectura/i)).toBeVisible();
+
+    await businessRow.getByText(/eliminar «negocio»/i).click();
+    // Located by field NAME inside the row, not by the input's id: the id is
+    // `confirm-<workspace uuid>`, and reaching for it would mean querying the
+    // database for an id just to type in a box the row already contains.
+    await businessRow.locator('input[name="confirmName"]').fill("negocio");
+    await businessRow
+      .getByRole("button", { name: /confirmar eliminación de negocio/i })
+      .click();
+
+    // Case matters: "exacto" means exact, and the refusal comes from the RPC.
+    await expect(
+      page.getByText(/no coincide con el del espacio/i),
+    ).toBeVisible();
+
+    await businessRow.locator('input[name="confirmName"]').fill("Negocio");
+    await businessRow
+      .getByRole("button", { name: /confirmar eliminación de negocio/i })
+      .click();
+
+    // Gone from the list, and the app fell back to the personal anchor.
+    await expect(page.getByText("Negocio")).toHaveCount(0);
+
+    const deleted = sql(
+      `select w.deleted_at is not null from ez_finance.workspaces w
+       join   ez_finance.workspace_members m on m.workspace_id = w.id
+       join   auth.users u on u.id = m.user_id
+       where  u.email = '${email}' and w.name = 'Negocio'`,
+    );
+    expect(deleted, "delete is SOFT — the row survives for support").toBe("t");
+
+    await page.goto("/app");
+    await expect(
+      page.getByText("Yape"),
+      "back on the personal space",
+    ).toBeVisible();
+
     // === BUDGET ============================================================
     // Back to the dashboard first: the accounts section ended on /app/cuentas, and
     // the management links live on the dashboard.
@@ -667,18 +781,89 @@ test.describe("Management pages (needs a live LOCAL Supabase stack)", () => {
     );
     expect(afterMode).toBe("400000|real");
 
-    // --- category limits ---------------------------------------------------
-    // The engine has been able to emit per-category alerts since it was written and
-    // nothing could ever configure one. What has to hold end to end: the number typed
-    // here reaches the database, and the DASHBOARD acts on it.
-    //
-    // The mode goes back to 'mayor' first — 'real' holds every figure at zero, which
-    // would hide the very alert this section is about.
+    // Both sections below need the income mode back on 'mayor', so it is reset
+    // ONCE here: 'real' holds every figure at zero, which would hide the
+    // recomputation the first section checks AND the alert the second one raises.
     await page.goto("/app/presupuesto");
     await page.check("#income-mode-mayor");
     await page.getByRole("button", { name: /^guardar$/i }).click();
     await expect(page.getByText(/guardado/i)).toBeVisible();
 
+    // === EDITING A MOVEMENT ================================================
+    // Until this existed a mistyped amount could only be deleted and retyped. What
+    // has to hold: the form opens PREFILLED (a blank form would silently blank the
+    // fields nobody touched), the correction reaches the row, and the dashboard
+    // recomputes from it.
+    await page.goto("/app/movimientos/nuevo");
+    await page.fill("#tx-amount", "80");
+    await page.selectOption("#tx-account", { label: "Efectivo" });
+
+    // The option's VALUE, read from the DOM rather than matched by label: the text
+    // is `${name} · ${bucket}`, so selecting by label would hardcode both the
+    // category's name and the wording of BUCKET_LABEL — two things this section has
+    // no opinion about and that earlier steps in this same test rename.
+    const categoryValue =
+      (await page
+        .locator("#tx-category option")
+        .nth(1)
+        .getAttribute("value")) ?? "";
+    await page.selectOption("#tx-category", categoryValue);
+
+    await page.fill("#tx-note", "Mal tipeado");
+    await page.getByRole("button", { name: /registrar/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    await expect(page.getByText(/mal tipeado/i)).toBeVisible();
+
+    // Reached through the ROW, not by the movement's label: the note is what this
+    // section controls, and it identifies exactly one row.
+    await page
+      .getByRole("listitem")
+      .filter({ hasText: "Mal tipeado" })
+      .getByRole("link", { name: /^editar/i })
+      .click();
+    await page.waitForURL(/\/app\/movimientos\/[^/]+\/editar$/);
+
+    // PREFILLED, and the amount round-trips as text: 8000 minor units must read
+    // "80.00", not "8000" and not "80". A formatter that disagreed with the parser
+    // would change the figure on a save that touched nothing.
+    await expect(page.locator("#tx-amount")).toHaveValue("80.00");
+    await expect(page.locator("#tx-note")).toHaveValue("Mal tipeado");
+
+    await page.fill("#tx-amount", "45.50");
+    await page.fill("#tx-note", "Corregido");
+    await page.getByRole("button", { name: /guardar cambios/i }).click();
+    await page.waitForURL(/\/app$/);
+
+    const edited = sql(
+      `select base_amount || '|' || entered_amount || '|' || note
+       from   ez_finance.transactions
+       where  workspace_id = '${workspaceId}' and note = 'Corregido'`,
+    );
+    expect(
+      edited,
+      "entered_amount tracks the base, or the row claims the person typed one" +
+        " figure while the app stored another",
+    ).toBe("4550|4550|Corregido");
+
+    const oldRow = sql(
+      `select count(*) from ez_finance.transactions
+       where  workspace_id = '${workspaceId}' and note = 'Mal tipeado'`,
+    );
+    expect(
+      Number(oldRow),
+      "an edit UPDATES; it does not insert a second row",
+    ).toBe(0);
+
+    // The dashboard recomputed: the corrected figure is on screen and the wrong one
+    // is not. This is what makes the edit real rather than merely stored.
+    await expect(page.getByText(/S\/\s*45\.50/).first()).toBeVisible();
+    await expect(page.getByText(/corregido/i)).toBeVisible();
+
+    // --- category limits ---------------------------------------------------
+    // The engine has been able to emit per-category alerts since it was written and
+    // nothing could ever configure one. What has to hold end to end: the number typed
+    // here reaches the database, and the DASHBOARD acts on it.
     await page.getByText(/límites por categoría/i).click();
 
     const petsLimit = page.locator(

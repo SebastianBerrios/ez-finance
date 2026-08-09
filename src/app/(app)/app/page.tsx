@@ -10,6 +10,13 @@ import { getMonthlyBudget } from "@/modules/budget/application/get-monthly-budge
 import { SupabaseBudgetConfigAdapter } from "@/modules/budget/infrastructure/supabase-budget-config-adapter";
 import { SupabaseMonthlySnapshotAdapter } from "@/modules/budget/infrastructure/supabase-monthly-snapshot-adapter";
 import { BucketCard } from "@/modules/budget/ui/components/bucket-card";
+import {
+  goalsNeedingAttention,
+  listGoalsWithPace,
+} from "@/modules/goals/application/list-goals-with-pace";
+import { SupabaseGoalAdapter } from "@/modules/goals/infrastructure/supabase-goal-adapter";
+import { listDueSoon } from "@/modules/scheduled/application/list-due-soon";
+import { SupabaseScheduledAdapter } from "@/modules/scheduled/infrastructure/supabase-scheduled-adapter";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 import { MovementList } from "@/modules/transactions/ui/components/movement-list";
 import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
@@ -70,14 +77,32 @@ export default async function AppPage() {
   // second round trip to the Auth server.
   const { user } = await getAuthenticatedUser();
 
-  const [accounts, movements] = await Promise.all([
+  const [accounts, movements, goals, dueSoon] = await Promise.all([
     new SupabaseAccountAdapter().listWithBalances(entry.value.workspaceId),
     new SupabaseTransactionAdapter().listForMonth(
       entry.value.workspaceId,
       now,
       user?.id ?? "",
     ),
+    // The two alert sources spec §5.11 asks for and the app did not have: a goal
+    // falling behind, and a schedule about to run. Both are DERIVED — the pace from
+    // the goal's own window, the next occurrence from its day of month — so neither
+    // adds a query beyond the list it already needed.
+    listGoalsWithPace(
+      { workspaceId: entry.value.workspaceId, today: now },
+      { goals: new SupabaseGoalAdapter() },
+    ),
+    listDueSoon(
+      { workspaceId: entry.value.workspaceId, today: now },
+      { scheduled: new SupabaseScheduledAdapter() },
+    ),
   ]);
+
+  // A FAILED read produces no alerts rather than a broken panel. Not being able to
+  // check whether a goal is behind is not the same as it being fine, but the dashboard
+  // is not the screen to argue that on — /app/metas says so where it matters.
+  const attention = goals.ok ? goalsNeedingAttention(goals.value) : [];
+  const upcoming = dueSoon.ok ? dueSoon.value : [];
 
   const budget = await getMonthlyBudget(
     { workspaceId: entry.value.workspaceId, month: now },
@@ -104,6 +129,7 @@ export default async function AppPage() {
   }
 
   const monthLabel = `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+  const isArchived = entry.value.isArchived;
 
   return (
     <main className="flex min-h-screen w-full flex-col">
@@ -124,6 +150,34 @@ export default async function AppPage() {
             Tu presupuesto
           </h1>
         </div>
+
+        {/*
+          SAID BEFORE ANYTHING ELSE when the space is archived. Every write path
+          refuses for this workspace (20260807210000), so a dashboard that looked
+          normal would offer buttons the database declines — which is the failure
+          archiving was supposed to prevent, not cause. The numbers stay: reports
+          surviving is the whole reason to archive instead of delete.
+        */}
+        {isArchived && (
+          <section
+            role="status"
+            className="border-border bg-muted/40 rounded-xl border px-5 py-4"
+          >
+            <p className="text-foreground text-sm font-medium">
+              Este espacio está en solo lectura
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+              Lo archivaste, así que conserva sus reportes pero no acepta
+              movimientos nuevos. Puedes restaurarlo desde Espacios.
+            </p>
+            <Link
+              href="/app/espacios"
+              className="text-foreground mt-3 inline-flex text-sm font-medium underline"
+            >
+              Ir a Espacios
+            </Link>
+          </section>
+        )}
 
         {needsSetup ? (
           /*
@@ -226,6 +280,63 @@ export default async function AppPage() {
           </>
         )}
 
+        {/*
+          A SECOND panel, and outside the budget branch on purpose. The bucket alerts
+          above are budget OUTPUT — they only exist when the month computed. A goal
+          falling behind or a charge landing on Friday matters just as much when the
+          budget config is broken, and burying them inside that branch would hide them
+          exactly when the dashboard is least useful.
+
+          Two panels rather than one merged list because they answer different
+          questions: "how are my cubes doing" versus "what is coming".
+        */}
+        {(attention.length > 0 || upcoming.length > 0) && (
+          <section
+            aria-label="Avisos"
+            className="border-border rounded-xl border p-4"
+          >
+            <p className="text-foreground text-sm font-medium">Te avisamos</p>
+            <ul className="mt-2 flex flex-col gap-2">
+              {upcoming.map((due) => (
+                <li key={due.id} className="text-muted-foreground text-xs">
+                  {/*
+                    The DAY, not just "en 3 días": someone deciding whether to move
+                    money needs the date they are planning around. Both are given
+                    because the countdown is what makes it feel close.
+                  */}
+                  <span className="text-foreground">{due.name}</span>{" "}
+                  {due.kind === "income" ? "entra" : "sale"}{" "}
+                  {due.daysUntil === 0
+                    ? "hoy"
+                    : due.daysUntil === 1
+                      ? "mañana"
+                      : `en ${due.daysUntil} días`}{" "}
+                  ({due.occursOn})
+                </li>
+              ))}
+
+              {attention.map((item) => (
+                <li
+                  key={item.goal.id}
+                  className="text-muted-foreground text-xs"
+                >
+                  <span className="text-foreground">{item.goal.name}</span>{" "}
+                  {item.pace?.kind === "OVERDUE"
+                    ? "pasó su fecha y todavía le falta"
+                    : "va atrasada para su fecha"}
+                </li>
+              ))}
+            </ul>
+
+            <Link
+              href="/app/programadas"
+              className="text-muted-foreground hover:text-foreground mt-3 inline-flex text-xs underline"
+            >
+              Ver programados
+            </Link>
+          </section>
+        )}
+
         {accounts.ok && accounts.value.length > 0 && (
           <section className="bg-card border-border rounded-xl border p-5">
             <h2 className="text-muted-foreground text-xs tracking-widest uppercase">
@@ -295,13 +406,19 @@ export default async function AppPage() {
           The primary action, and placed after the numbers on purpose: the person
           reads where they stand, then records. Recording is also the ONLY way any
           of the figures above ever move.
+
+          Absent in an archived space rather than disabled: a greyed-out button
+          invites a click and explains nothing, and the banner above has already
+          said why. The route refuses too, and so does the database.
         */}
-        <Link
-          href="/app/movimientos/nuevo"
-          className="bg-primary text-primary-foreground hover:bg-primary/90 mt-2 flex items-center justify-center rounded-xl px-5 py-4 text-sm font-medium transition-colors"
-        >
-          Registrar movimiento
-        </Link>
+        {!isArchived && (
+          <Link
+            href="/app/movimientos/nuevo"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 mt-2 flex items-center justify-center rounded-xl px-5 py-4 text-sm font-medium transition-colors"
+          >
+            Registrar movimiento
+          </Link>
+        )}
 
         {/*
           The management doors. Below the numbers because they are the exception —
