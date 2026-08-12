@@ -514,14 +514,34 @@ correcto según la sensibilidad.
 
 ## 6. Límites del plan actual
 
-Por ahora existe un **único plan** (sin cobros ni facturación) con estos límites:
+Por ahora existe un **único plan**, sin cobros ni facturación, y por lo tanto
+**sin límites comerciales**. Lo único que existe es un tope técnico:
 
-- Cada persona puede tener como máximo **1 workspace personal** y **2 workspaces
-  compartidos**.
-- **No hay límite** de integrantes por workspace compartido.
-- Al intentar crear un workspace por encima del límite (un segundo personal o un
-  tercer compartido), la app lo **rechaza** y ofrece archivar o eliminar uno
-  existente.
+- Cada persona puede tener hasta **20 espacios propios** (de los que es
+  propietaria). No es un límite de producto: es un guardarraíl contra el abuso.
+  Esta es una ruta de creación self-service sobre un proyecto de base de datos
+  compartido, y sin techo un bucle —un reintento, un formulario trabado, alguien
+  curioso— escribe filas sin fin en una base que comparten las demás apps. El
+  número es deliberadamente generoso para una persona real e inútil para un
+  script.
+- Los espacios **archivados y eliminados no cuentan**, así que archivar libera
+  cupo de verdad.
+- Pertenecer a espacios de otras personas **nunca** consume tu cupo: se cuentan
+  solo los que sos propietaria.
+- **No hay límite** de integrantes por espacio compartido.
+- Al intentar crear uno por encima del tope, la app lo **rechaza** y ofrece
+  archivar o eliminar uno existente.
+
+> **Nota de producto.** Este documento decía antes «máximo 1 espacio personal y 2
+> compartidos». Nunca se implementó, y se descartó a propósito: un límite así
+> tiene sentido cuando separa un plan gratuito de uno pago, y hoy no hay planes.
+> Una restricción que no vende nada solo molesta a la persona que la encuentra.
+> Cuando existan cobros, el límite comercial se define acá y recién entonces se
+> implementa.
+>
+> El espacio **personal** sigue siendo único por otra razón, que no es un límite
+> de plan sino una invariante del modelo: es el punto de partida que la app
+> resuelve al iniciar sesión, y un segundo haría esa resolución ambigua. Ver §5.2.
 
 ---
 
