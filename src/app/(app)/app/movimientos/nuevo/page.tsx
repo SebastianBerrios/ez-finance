@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
-import { TransactionForm } from "@/modules/transactions/ui/components/transaction-form";
+import { OfflineTransactionForm } from "../offline-transaction-form";
 
 import { recordTransactionAction } from "./record-transaction.action";
 
@@ -57,12 +57,18 @@ export default async function NewTransactionPage() {
         Nuevo movimiento
       </h1>
 
-      <TransactionForm
+      {/*
+        The OFFLINE-capable form. Recording a movement is the action people take many
+        times a day, often with no signal — §3.3 names it first — so this screen queues on
+        the device instead of failing.
+      */}
+      <OfflineTransactionForm
         action={recordTransactionAction}
         accounts={accounts.value}
         categories={categories.ok ? categories.value : []}
         currencyLabel="soles"
         today={today}
+        workspaceId={entry.value.workspaceId}
       />
     </main>
   );
