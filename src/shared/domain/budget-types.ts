@@ -14,7 +14,16 @@ export type TransactionKind = "income" | "expense" | "transfer";
 export type Bucket = "need" | "want" | "save";
 
 export type AccountType =
-  "cash" | "bank" | "card" | "wallet" | "investment" | "savings";
+  | "cash"
+  | "bank"
+  | "card"
+  | "wallet"
+  | "investment"
+  | "savings"
+  // Money OWED TO the workspace, not money it holds — the "Por cobrar" side of a
+  // split expense. Deliberately NOT savings: the engine derives isSavings from this
+  // field, so lending someone money must not count as having saved it.
+  | "receivable";
 
 /** Which leg of a transfer pair this row represents */
 export type TransferLeg = "out" | "in";

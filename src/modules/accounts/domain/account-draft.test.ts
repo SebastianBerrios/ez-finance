@@ -29,6 +29,20 @@ describe("accountDraft.create", () => {
     },
   );
 
+  it("accepts `receivable`, the split-expense account type", () => {
+    // Three places have to agree about this set — this list, AccountType in
+    // shared/domain/budget-types.ts, and the CHECK on ez_finance.accounts.type — and
+    // the file's own comment says the drift is not cosmetic: the engine derives
+    // isSavings from the string, so a value one layer accepts and another does not is
+    // a row that gets budgeted wrong rather than rejected.
+    //
+    // It is NOT offered in the account form on purpose (see account-form.tsx): the
+    // "Por cobrar" account is created by the split flow, not by hand.
+    const result = accountDraft.create({ ...VALID, type: "receivable" });
+
+    expect(result.ok).toBe(true);
+  });
+
   it("rejects a type the engine does not know", () => {
     // The engine derives isSavings from this exact string set; anything else
     // would be silently treated as non-savings.
