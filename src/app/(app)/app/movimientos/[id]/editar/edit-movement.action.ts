@@ -6,6 +6,7 @@ import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { editMovement } from "@/modules/transactions/application/edit-movement";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 import type { TransactionFormState } from "@/modules/transactions/ui/components/transaction-form";
+import { transactionErrorMessage } from "@/modules/transactions/ui/transaction-error-message";
 import { parseAmountToMinorUnits } from "@shared/domain/money-input";
 
 const MINOR_UNIT_EXPONENT = 2;
@@ -62,31 +63,7 @@ export async function editMovementAction(
   );
 
   if (!result.ok) {
-    switch (result.error.kind) {
-      case "InvalidAmount":
-        return { error: "El monto tiene que ser mayor que cero." };
-      case "InvalidDate":
-        return { error: "Elige una fecha válida." };
-      case "InvalidKind":
-        return { error: "Elige si es un gasto o un ingreso." };
-      case "AccountRequired":
-        return { error: "Elige la cuenta del movimiento." };
-      case "NoteTooLong":
-        return { error: "La nota puede tener hasta 500 caracteres." };
-      case "UnknownReference":
-        return { error: "Esa cuenta o categoría no es de este espacio." };
-      case "TransferNotEditable":
-        return {
-          error:
-            "Una transferencia no se edita: elimínala y regístrala de nuevo.",
-        };
-      case "NotPermitted":
-        return { error: "Solo puedes editar los movimientos que registraste." };
-      case "WorkspaceNotReady":
-        return { error: "Primero crea una cuenta en tu espacio." };
-      default:
-        return { error: "No pudimos guardar el cambio. Intenta de nuevo." };
-    }
+    return { error: transactionErrorMessage(result.error, "edit") };
   }
 
   // Back to the dashboard, where the corrected figure has already moved the buckets.

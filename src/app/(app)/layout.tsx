@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { bootstrapUserWorkspace } from "@/modules/auth/infrastructure/bootstrap";
 import { readOnboardingStatus } from "@/modules/onboarding/infrastructure/onboarding-status";
 
+import { OfflineSync } from "./offline-sync";
+
 /**
  * Every /app render reads the session cookie, so there is nothing here to
  * prerender.
@@ -70,5 +72,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     }
   }
 
-  return <div className="flex min-h-screen w-full flex-col">{children}</div>;
+  return (
+    <div className="flex min-h-screen w-full flex-col">
+      {/*
+        ABOVE everything, and on every authenticated screen. It says when there is no
+        connection, empties the queue when there is one again, and registers the service
+        worker — none of which can depend on the person being on a particular page, since
+        a reconnect happens wherever they happen to be.
+
+        Mounted HERE and not in the root layout on purpose: the marketing and auth pages
+        have nothing worth serving offline, and a worker scoped over them would start
+        caching pages that set cookies.
+      */}
+      <OfflineSync />
+      {children}
+    </div>
+  );
 }

@@ -6,9 +6,10 @@ import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { SupabaseAccountAdapter } from "@/modules/accounts/infrastructure/supabase-account-adapter";
 import { SupabaseCategoryAdapter } from "@/modules/categories/infrastructure/supabase-category-adapter";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
-import { TransactionForm } from "@/modules/transactions/ui/components/transaction-form";
 import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { formatMinorUnitsForInput } from "@shared/domain/money-input";
+
+import { OfflineTransactionForm } from "../../offline-transaction-form";
 
 import { editMovementAction } from "./edit-movement.action";
 
@@ -110,13 +111,20 @@ export default async function EditMovementPage({
         Editar movimiento
       </h1>
 
-      <TransactionForm
+      <OfflineTransactionForm
         action={editMovementAction}
         accounts={accounts.value}
         categories={categories.ok ? categories.value : []}
         currencyLabel="soles"
         today={today}
+        workspaceId={entry.value.workspaceId}
         submitLabel="Guardar cambios"
+        /*
+          The row's version as of THIS render. A correction made offline lands whatever
+          happened meanwhile — last write wins — and this is what lets the sync say so
+          instead of overwriting in silence.
+        */
+        baseUpdatedAt={movement.value.updatedAt}
         initial={{
           id: movement.value.id,
           kind: movement.value.kind,

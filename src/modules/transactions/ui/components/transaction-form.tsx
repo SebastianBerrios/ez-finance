@@ -59,6 +59,19 @@ export interface TransactionFormInitialValues {
   readonly note: string | null;
 }
 
+/**
+ * What makes this form work without a connection.
+ *
+ * A CALLBACK RATHER THAN THE QUEUE ITSELF: the queue is IndexedDB, this is a component,
+ * and the layer that owns adapters is the delivery layer. Absent means the form is
+ * online-only, which is the correct behaviour for every screen that has no offline story
+ * — the person gets the ordinary "no pudimos guardar" instead of a false promise.
+ */
+export interface OfflineSubmit {
+  /** Stores the write. False means it could NOT be stored — never report that as saved. */
+  readonly enqueue: (form: FormData) => Promise<boolean>;
+}
+
 type TransactionActionFn = (
   prev: TransactionFormState,
   formData: FormData,
@@ -74,6 +87,8 @@ interface TransactionFormProps {
   /** Absent when recording; present when correcting an existing movement. */
   initial?: TransactionFormInitialValues;
   submitLabel?: string;
+  /** Absent when the screen has no offline story. See OfflineSubmit. */
+  offline?: OfflineSubmit;
 }
 
 const initialState: TransactionFormState = {};
@@ -105,17 +120,56 @@ export function TransactionForm({
   today,
   initial,
   submitLabel = "Registrar",
+  offline,
 }: TransactionFormProps) {
   const [state, formAction, isPending] = useActionState(action, initialState);
   const [kind, setKind] = useState<"expense" | "income">(
     initial?.kind ?? "expense",
   );
+  const [queued, setQueued] = useState<"saved" | "failed" | null>(null);
 
   const openAccounts = selectable(accounts, initial?.accountId);
   const openCategories = selectable(categories, initial?.categoryId);
 
+  /**
+   * The offline path, and the ONE place it can be decided: at submit time.
+   *
+   * Checked here rather than by disabling the button, because the connection can drop
+   * between opening the form and pressing save — which on a phone is the normal case, not
+   * the edge one. React skips the server action when the submit event is prevented, so
+   * this is a genuine fork rather than a race with it.
+   *
+   * navigator.onLine is a WEAK signal (it means "there is a network interface", not "the
+   * server is reachable"), and it is used only in the direction where it is reliable:
+   * false really does mean a request would fail. When it lies the other way, the write
+   * goes out normally and the sender's own failure handling queues nothing — the person
+   * gets the ordinary error, which is the same behaviour as before.
+   */
+  async function handleOfflineSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    if (offline === undefined) return;
+    if (navigator.onLine) return;
+
+    event.preventDefault();
+    const form = event.currentTarget;
+    const stored = await offline.enqueue(new FormData(form));
+
+    setQueued(stored ? "saved" : "failed");
+
+    // Cleared only when RECORDING: the next movement starts from an empty form. An edit
+    // keeps its values, because the person is looking at a correction they just made and
+    // an emptied edit form would look like it lost it.
+    if (stored && initial === undefined) form.reset();
+  }
+
   return (
-    <form action={formAction} noValidate className="flex flex-col gap-5">
+    <form
+      action={formAction}
+      onSubmit={(event) => void handleOfflineSubmit(event)}
+      noValidate
+      className="flex flex-col gap-5"
+    >
       {/*
         Only when correcting. The server does not trust it — it scopes the UPDATE to
         the current workspace and the policy scopes it to rows the caller authored —
@@ -132,6 +186,38 @@ export function TransactionForm({
           className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
         >
           {state.error}
+        </div>
+      )}
+
+      {/*
+        SAYS WHERE IT IS, not just "guardado". Someone who reads a plain confirmation and
+        then does not see the movement in a list on another device would reasonably
+        conclude the app lost it.
+      */}
+      {queued === "saved" && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="bg-muted/60 text-foreground rounded-lg px-4 py-3 text-sm"
+        >
+          Guardado en este dispositivo. Se va a sincronizar cuando vuelvas a
+          tener conexión.
+        </div>
+      )}
+
+      {/*
+        The queue itself failed — no IndexedDB, private mode, storage full. This has to be
+        a REFUSAL and not a reassurance: promising that a movement is safe when nothing
+        stored it is the one outcome that loses money silently.
+      */}
+      {queued === "failed" && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm"
+        >
+          No pudimos guardarlo en este dispositivo. Anotalo y registralo cuando
+          tengas conexión.
         </div>
       )}
 

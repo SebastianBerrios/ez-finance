@@ -46,6 +46,16 @@ export interface EditableMovement {
   readonly accountId: string;
   readonly categoryId: string | null;
   readonly note: string | null;
+  /**
+   * The row's version, as `updated_at`.
+   *
+   * NOT for display — it exists so an edit made OFFLINE can be told apart from one made
+   * against the current row. The merge rule is last-write-wins, and the phone's write
+   * lands either way; this is what lets the app say "your version replaced a change made
+   * meanwhile" instead of replacing it in silence, which is the difference between the
+   * rule and plain data loss.
+   */
+  readonly updatedAt: string;
 }
 
 export interface TransactionPort {

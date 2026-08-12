@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Button } from "@shared/ui/button";
+import { purgeOfflineCaches } from "@shared/ui/purge-offline-caches";
 
 export interface LogoutButtonState {
   error?: string;
@@ -23,6 +24,12 @@ export function LogoutButton({ action }: LogoutButtonProps) {
 
   function handleLogout() {
     startTransition(async () => {
+      // BEFORE the sign-out, and awaited: the offline caches hold rendered dashboards
+      // with real amounts, and on a shared computer they would outlive the session.
+      // Awaiting it means the purge finishes before the redirect navigates away.
+      // It never throws — a cache that will not open must not block the logout.
+      await purgeOfflineCaches();
+
       // Two different failures, one message. The action RESOLVES with an error
       // when the sign-out itself failed, and REJECTS when the request never
       // completed (dropped connection, 500) — the likelier of the two. An

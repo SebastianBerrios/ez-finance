@@ -79,6 +79,7 @@ interface EditableRow {
   readonly note: string | null;
   readonly transfer_id: string | null;
   readonly created_by: string | null;
+  readonly updated_at: string;
 }
 
 function embeddedName(
@@ -205,7 +206,7 @@ export class SupabaseTransactionAdapter implements TransactionPort {
       const { data, error } = await supabase
         .from("transactions")
         .select(
-          "id, kind, base_amount, occurred_on, account_id, category_id, note, transfer_id, created_by",
+          "id, kind, base_amount, occurred_on, account_id, category_id, note, transfer_id, created_by, updated_at",
         )
         .eq("workspace_id", workspaceId)
         .eq("id", transactionId)
@@ -239,6 +240,7 @@ export class SupabaseTransactionAdapter implements TransactionPort {
         accountId: row.account_id,
         categoryId: row.category_id,
         note: row.note,
+        updatedAt: row.updated_at,
       });
     } catch {
       return err({ kind: "Unavailable" });

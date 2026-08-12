@@ -6,6 +6,7 @@ import { resolveCurrentWorkspace } from "@/app/(app)/current-workspace";
 import { recordTransaction } from "@/modules/transactions/application/record-transaction";
 import { SupabaseTransactionAdapter } from "@/modules/transactions/infrastructure/supabase-transaction-adapter";
 import type { TransactionFormState } from "@/modules/transactions/ui/components/transaction-form";
+import { transactionErrorMessage } from "@/modules/transactions/ui/transaction-error-message";
 import { getAuthenticatedUser } from "@/shared/infrastructure/supabase/current-user";
 import { parseAmountToMinorUnits } from "@shared/domain/money-input";
 
@@ -55,29 +56,7 @@ export async function recordTransactionAction(
   );
 
   if (!result.ok) {
-    switch (result.error.kind) {
-      case "InvalidAmount":
-        return { error: "El monto tiene que ser mayor que cero." };
-      case "InvalidDate":
-        return { error: "Elige una fecha válida." };
-      case "InvalidKind":
-        return { error: "Elige si es un gasto o un ingreso." };
-      case "AccountRequired":
-        return { error: "Elige la cuenta del movimiento." };
-      case "NoteTooLong":
-        return { error: "La nota puede tener hasta 500 caracteres." };
-      case "UnknownReference":
-        return { error: "Esa cuenta o categoría no es de este espacio." };
-      case "NotPermitted":
-        return {
-          error:
-            "No tienes permiso para registrar movimientos en este espacio.",
-        };
-      case "WorkspaceNotReady":
-        return { error: "Primero crea una cuenta en tu espacio." };
-      default:
-        return { error: "No pudimos guardar el movimiento. Intenta de nuevo." };
-    }
+    return { error: transactionErrorMessage(result.error, "record") };
   }
 
   // Back to the dashboard, where the new movement has already changed the buckets.

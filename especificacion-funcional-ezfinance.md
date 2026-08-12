@@ -79,6 +79,33 @@ cada módulo.
 3. **Offline-first como derecho.** Registrar transacciones, editar categorías y
    consultar el mes en curso funciona sin conexión y se sincroniza después.
    Ningún flujo crítico depende de estar en línea en tiempo real.
+
+   **Qué funciona hoy sin conexión** (lo demás sigue pendiente, y decirlo importa
+   más que prometerlo):
+
+   - **Registrar y corregir un movimiento.** Se guarda en el dispositivo y se
+     envía al reconectar, en el orden en que la persona lo hizo.
+   - **Consultar** las pantallas de `/app` que ya visitó, tal como las dejó. La
+     red siempre se prefiere: la copia local es para cuando no hay respuesta, no
+     para que se sienta más rápido. Son cifras de dinero — mostrar una cacheada
+     habiendo una viva sería mostrar un número que quizá ya es falso.
+   - **La primera visita en un dispositivo no** funciona sin conexión; a partir de
+     la segunda sí. Es inherente a cómo se activa un service worker.
+   - **Editar categorías, cuentas o presupuesto NO** funciona sin conexión
+     todavía: son actos de configuración, se hacen una vez y casi nunca en el
+     colectivo. Fallan con su mensaje habitual en vez de fingir que se guardaron.
+
+   **Conflictos: gana la última escritura, y se avisa.** Si un movimiento cambió
+   mientras el dispositivo estaba sin conexión, la versión del dispositivo queda —
+   pero la app lo dice. Nunca en silencio: una corrección que desaparece sin una
+   palabra es indistinguible de una app que perdió el dato. Si el movimiento fue
+   eliminado mientras tanto, **no se resucita**.
+
+   **Lo guardado sin conexión sobrevive** que se cierre la app o que el teléfono
+   mate la pestaña, y **al cerrar sesión se borran las copias locales de las
+   pantallas** (son montos reales en un dispositivo posiblemente compartido, §3.1)
+   pero **no la cola**: son movimientos que la persona registró y cree guardados.
+
 4. **Preservación del historial.** La información de dominio se **archiva, no se
    borra**. Un reporte de marzo no se rompe porque en mayo la persona archive una
    categoría o una cuenta. El borrado físico solo aplica a datos sin valor
