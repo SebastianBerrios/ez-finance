@@ -176,7 +176,12 @@ begin
     raise exception 'debtors_required' using errcode = '22023';
   end if;
 
-  select pg_catalog.count(*), pg_catalog.coalesce(pg_catalog.sum((d ->> 'amount')::bigint), 0)
+  -- COALESCE IS UNQUALIFIED, and it has to be: it is a SQL construct, not a function
+  -- that lives in a schema, so `pg_catalog.coalesce` does not exist and the body fails
+  -- at RUNTIME — which is exactly why supabase/tests/split_rpcs.sql exists. Everything
+  -- else here is a real function and stays qualified, because `search_path to ''` means
+  -- nothing resolves without a schema. 20260725120000 says the same about NULLIF.
+  select pg_catalog.count(*), coalesce(pg_catalog.sum((d ->> 'amount')::bigint), 0)
   into   v_count, v_owed
   from   pg_catalog.jsonb_array_elements(p_debtors) d;
 
@@ -187,7 +192,7 @@ begin
   -- Checked BEFORE anything is written. Every debtor must be a real name and a real
   -- amount, or the expense lands and the explanation does not.
   for v_debtor in select d from pg_catalog.jsonb_array_elements(p_debtors) d loop
-    if pg_catalog.btrim(pg_catalog.coalesce(v_debtor ->> 'name', '')) = '' then
+    if pg_catalog.btrim(coalesce(v_debtor ->> 'name', '')) = '' then
       raise exception 'debtor_name_required' using errcode = '22023';
     end if;
     if (v_debtor ->> 'amount') is null or (v_debtor ->> 'amount')::bigint <= 0 then
