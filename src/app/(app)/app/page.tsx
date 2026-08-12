@@ -426,6 +426,19 @@ export default async function AppPage() {
           Without these the app had no way to add a category or an account after
           setup, and setup cannot be re-entered.
         */}
+        {/*
+          Above the rest of the management doors because it holds MONEY that is owed to
+          you — it belongs with the numbers, not with the setup screens. Shown even in an
+          archived space: reading who owes you is exactly what archiving preserves.
+        */}
+        <Link
+          href="/app/deudas"
+          className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"
+        >
+          <span className="text-sm font-medium">Te deben</span>
+          <span className="text-sm">›</span>
+        </Link>
+
         <Link
           href="/app/programadas"
           className="border-border text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center justify-between rounded-xl border px-5 py-4 transition-colors"

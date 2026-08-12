@@ -77,7 +77,9 @@ declare
     'delete_transfer',
     'account_balances',
     'budget_config_for',
-    'goal_progress'
+    'goal_progress',
+    'record_split_expense',
+    'settle_split'
   ];
 begin
   select string_agg(p.proname, ', ' order by p.proname)

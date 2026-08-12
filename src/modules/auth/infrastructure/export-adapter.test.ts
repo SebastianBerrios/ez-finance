@@ -190,15 +190,17 @@ describe("ExportAdapter.exportUserData", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // Eight datasets plus the profile, in both formats, plus the readme. The list is
+    // Nine datasets plus the profile, in both formats, plus the readme. The list is
     // asserted in FULL rather than by count: the point of this change is which datasets
-    // are present, and "19 files" would pass with the movements missing.
+    // are present, and "21 files" would pass with the movements missing.
     expect(readZip(result.value.bytes).names).toEqual([
       "LEEME.txt",
       "categorias.csv",
       "categorias.json",
       "cuentas.csv",
       "cuentas.json",
+      "divisiones.csv",
+      "divisiones.json",
       "espacios.csv",
       "espacios.json",
       "membresias.csv",
@@ -521,6 +523,7 @@ describe("ExportAdapter.exportUserData", () => {
       "movimientos",
       "metas",
       "programados",
+      "divisiones",
     ]) {
       expect(readme).toContain(`${name}.json / ${name}.csv`);
     }
