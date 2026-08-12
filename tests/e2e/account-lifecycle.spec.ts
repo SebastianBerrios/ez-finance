@@ -282,6 +282,8 @@ test.describe("Account lifecycle (needs a live LOCAL Supabase stack)", () => {
       "categorias.json",
       "cuentas.csv",
       "cuentas.json",
+      "divisiones.csv",
+      "divisiones.json",
       "espacios.csv",
       "espacios.json",
       "membresias.csv",

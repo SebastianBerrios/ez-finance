@@ -209,6 +209,24 @@ const DATASETS: readonly Dataset[] = [
     ],
     describe: "Tus movimientos programados.",
   },
+  {
+    // NOT derivable from movimientos.csv, which is why it needs its own file: the
+    // transfer into "Por cobrar" shows that money moved, and only these rows say WHO
+    // owes it and whether it came back.
+    file: "divisiones",
+    table: "expense_splits",
+    columns: [
+      "id",
+      "workspace_id",
+      "transaction_id",
+      "debtor_name",
+      "amount",
+      "settled_at",
+      "created_at",
+    ],
+    describe:
+      "Los gastos que dividiste: quién te debe y qué ya te devolvieron.",
+  },
 ];
 
 /** Added to every movement in place of the raw created_by UUID. */
