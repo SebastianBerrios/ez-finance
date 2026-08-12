@@ -438,20 +438,60 @@ va a buen ritmo.
 
 ---
 
-### 5.9 División de gastos (splits) `[PROPUESTA]`
+### 5.9 División de gastos (splits) `[ESPECIFICADO — implementado]`
 
-**Propósito (a confirmar).** Repartir un gasto entre integrantes de un workspace
-compartido y llevar cuenta de quién debe a quién. Este feature solo está **nombrado**
-en el orden de desarrollo previsto; no tiene comportamiento definido todavía.
+**Propósito.** Registrar un gasto que se reparte con otras personas y llevar la cuenta
+de quién te debe cuánto, **sin distorsionar el 50/30/20**.
 
-**Preguntas para definir su alcance:**
+**El modelo contable, que es la decisión que ordena todo lo demás: solo tu parte
+consume tu cubo.** Pagaste 900 y te deben 600 → tu cubo consumió 300. Eso se registra
+como **dos** movimientos:
 
-- ¿Es división de un gasto puntual, o un sistema de "cuentas por cobrar" entre
-  integrantes?
-- ¿Se salda dentro de la app (registrando un pago) o solo se informa el balance?
-- ¿Aplica solo a workspaces compartidos? (Presumiblemente sí.)
-- ¿Cómo interactúa un split con el presupuesto 50/30/20 de cada persona?
-- ¿Requiere multi-moneda?
+- un **gasto** de 300 en su categoría → consume el cubo que corresponde;
+- una **transferencia** de 600 a una cuenta **"Por cobrar"** → los 900 realmente
+  salieron de la cuenta que pagó.
+
+Cobrar es la transferencia inversa: de "Por cobrar" a la cuenta que la persona elija.
+
+**Por qué así y no como ingreso.** Registrar la devolución como ingreso era la
+alternativa obvia y es incorrecta: el §1 calcula todo el método sobre el ingreso del
+mes, así que inflarlo sube los tres objetivos y muestra más margen del que existe —
+exactamente lo "engañoso" que el spec busca evitar.
+
+**Qué puede hacer la persona:**
+
+- **Dividir un gasto**: su parte, la cuenta que pagó, la categoría _de su parte_, y una
+  fila por persona que le debe (nombre y monto). Hasta 20 personas por gasto.
+- **Ver quién le debe**, con el total, y **marcar un cobro** eligiendo en qué cuenta
+  entra la plata — alguien puede pagarle en efectivo algo que puso con tarjeta.
+
+**Reglas:**
+
+- **Su parte puede ser 0.** Pagar algo de otra persona en su totalidad es real; exigir
+  un monto propio forzaría a registrar un gasto falso. En ese caso no se escribe fila
+  de gasto y la deuda cuelga de la pata de la transferencia que aterriza en "Por
+  cobrar".
+- **Los deudores son texto libre, no usuarios de la app.** Las invitaciones no existen
+  y están bloqueadas detrás de la graduación (§6), así que un deudor es un nombre que
+  la gente del espacio escribe. Si fuera una persona invitada, los splits quedarían
+  bloqueados igual que la colaboración.
+- **Un gasto dividido sin nadie que deba es un gasto normal**, y se rechaza: la app ya
+  tiene una pantalla para eso.
+- **La cuenta "Por cobrar" es una por espacio**, la crea el sistema la primera vez que
+  se necesita y su saldo **es** el total que le deben. No se ofrece en el formulario de
+  cuentas: es una consecuencia de dividir un gasto, no algo que se configure.
+- **Su tipo no es "ahorro"**, y eso es crítico: el motor alimenta el cubo de ahorro
+  solo desde el tipo `savings`, así que prestarle plata a alguien no puede contar como
+  haber ahorrado.
+- **Aplica a cualquier espacio, no solo a los compartidos.** Dividir la cena con un
+  amigo que no usa la app es el caso más común, y no requiere compartir nada.
+- **Sin multi-moneda propia**: todo el gasto va en la moneda base del espacio, igual
+  que el resto de los movimientos.
+- Quien puede registrar movimientos puede dividir y cobrar (owner, admin, member); un
+  observer lee. Un espacio archivado no acepta ni lo uno ni lo otro.
+- **Un gasto dividido son tres escrituras que caen todas o ninguna** (el gasto, la
+  transferencia y las filas de quién debe), y **cobrar dos veces se rechaza**: el
+  segundo intento no mueve plata.
 
 ---
 
@@ -605,7 +645,16 @@ Estos comportamientos ya están decididos y deben cumplirse:
 ## 9. Decisiones pendientes / preguntas abiertas (consolidado)
 
 Lista de trabajo para cerrar el comportamiento de los módulos aún esbozados antes
-(o durante) su spec:
+(o durante) su spec.
+
+**Esta lista está atrasada respecto del código.** Varias de estas preguntas ya
+quedaron respondidas por la implementación y por decisiones tomadas sobre la marcha
+(los tipos de cuenta y su relación con el motor, la inmutabilidad de la moneda, el set
+de categorías por defecto, el alcance de editar movimientos propios, qué reportes y qué
+exportaciones entran, el canal de las alertas financieras). Solo el bloque de **Splits**
+fue barrido y marcado; el resto sigue escrito como estaba y hay que revisarlo módulo por
+módulo contra lo que el código ya hace, en vez de asumir que una pregunta sigue abierta
+porque figura acá.
 
 **Cuentas**
 
@@ -639,10 +688,12 @@ Lista de trabajo para cerrar el comportamiento de los módulos aún esbozados an
 - Relación entre aportes a metas y el cubo de ahorro del 50/30/20.
 - Comportamiento al cumplir o al vencer.
 
-**Splits**
+**Splits** — `resuelto`, ver §5.9
 
-- Definir el modelo completo (aún solo está nombrado): gasto puntual vs. sistema de
-  saldos, cómo se salda, interacción con el presupuesto.
+- El modelo quedó definido e implementado: **solo tu parte consume tu cubo**, el resto
+  va a una cuenta "Por cobrar" cuyo saldo es lo que te deben, y se salda con la
+  transferencia inversa a la cuenta que la persona elija. Los deudores son texto libre,
+  no usuarios de la app.
 
 **Reportes**
 
