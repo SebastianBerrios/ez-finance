@@ -30,6 +30,17 @@ const initialState: AccountFormState = {};
  * engine derives isSavings from it, and transfers INTO a savings account count as
  * consumption of the 20 % bucket. Choosing it here is therefore a budgeting
  * decision, not a cosmetic one, which is what the hint text says.
+ *
+ * NOT EVERY AccountType IS OFFERED HERE, and the omission is deliberate.
+ * `receivable` — the "Por cobrar" account behind a split expense — is a SYSTEM
+ * account: it holds no money you can spend, its balance is the total other people
+ * owe you, and it is created by the split flow when the first shared expense needs
+ * it. Offering it in this form would invite someone to create a second one, or to
+ * put real money in a place the app treats as a debt owed to them.
+ *
+ * So this list is a curated subset, not a mirror of the union. A new type added to
+ * AccountType does NOT automatically belong on this screen; that is a product
+ * decision each time.
  */
 const ACCOUNT_TYPES: readonly { value: string; label: string }[] = [
   { value: "cash", label: "Efectivo" },

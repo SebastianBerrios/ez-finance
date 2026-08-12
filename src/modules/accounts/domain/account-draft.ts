@@ -27,6 +27,7 @@ const ACCOUNT_TYPES: readonly AccountType[] = [
   "wallet",
   "investment",
   "savings",
+  "receivable",
 ];
 
 /**
